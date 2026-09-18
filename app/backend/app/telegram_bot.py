@@ -16,6 +16,10 @@ def call(method,**data):
 def keyboard():
  return {"inline_keyboard":[[{"text":"🚀 باز کردن Hossein Hub","web_app":{"url":APP}}]]}
 def main():
+ try:
+  call("setMyCommands",commands=[{"command":"start","description":"باز کردن Hossein Hub"},{"command":"app","description":"Mini App"},{"command":"status","description":"وضعیت سیستم"}])
+  call("setChatMenuButton",menu_button={"type":"web_app","text":"Hossein Hub","web_app":{"url":APP}})
+ except Exception as e:print("telegram setup:",e,flush=True)
  offset=0
  while True:
   try:
@@ -25,6 +29,8 @@ def main():
     if chat and txt.split("@")[0]=="/id": call("sendMessage",chat_id=chat,text=f"Telegram ID: {chat}")
     elif chat and ADMIN_ID and str(chat)==ADMIN_ID and txt.split("@")[0] in ("/start","/app"):
      call("sendMessage",chat_id=chat,text="Hossein Hub\nدسترسی امن به داشبورد شخصی، آرشیو و سرویس‌ها.",reply_markup=keyboard())
+    elif chat and ADMIN_ID and str(chat)==ADMIN_ID and txt.split("@")[0]=="/status":
+     call("sendMessage",chat_id=chat,text="Hossein Hub فعال است. برای جزئیات Mini App را باز کن.",reply_markup=keyboard())
   except Exception as e:
    print("telegram:",type(e).__name__,str(e)[:180],flush=True);time.sleep(5)
 if __name__=="__main__":main()
