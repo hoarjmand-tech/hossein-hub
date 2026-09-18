@@ -8,16 +8,20 @@ from .archive import r as archive_router
 from .auth import r as auth_router
 from .extras import r as extras_router
 from .manage import r as manage_router
+from .telegram_app import r as telegram_router
 Base.metadata.create_all(engine)
 app=FastAPI(title="Hossein Hub",version="1.0.0")
 app.include_router(auth_router)
 app.include_router(archive_router)
 app.include_router(extras_router)
 app.include_router(manage_router)
+app.include_router(telegram_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
 def home(): return FileResponse(WEB/"home.html",headers=NO_CACHE)
+@app.get("/telegram",include_in_schema=False)
+def telegram_miniapp(): return FileResponse(WEB/"telegram.html",headers=NO_CACHE)
 @app.get("/archive",include_in_schema=False)
 def archive_home(): return FileResponse(WEB/"index.html",headers=NO_CACHE)
 @app.get("/manifest.json",include_in_schema=False)
