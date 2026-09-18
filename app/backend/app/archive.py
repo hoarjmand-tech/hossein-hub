@@ -6,11 +6,11 @@ from fastapi.responses import FileResponse,StreamingResponse
 from sqlalchemy import select,or_,func
 from sqlalchemy.orm import Session
 from .core import get_db,ARCHIVE_ROOT,MAX_UPLOAD
-from .auth import current_user,csrf
+from .auth import current_user,csrf_guard
 from .models import *
 from .schemas import *
 from .services import extract_text,thumbnail
-r=APIRouter(prefix="/api/archive",dependencies=[Depends(current_user)])
+r=APIRouter(prefix="/api/archive",dependencies=[Depends(current_user),Depends(csrf_guard)])
 DOCS=ARCHIVE_ROOT/"documents"; PREV=ARCHIVE_ROOT/"previews"; EXPORT=ARCHIVE_ROOT/"exports"
 for x in (DOCS,PREV,EXPORT):x.mkdir(parents=True,exist_ok=True)
 def log(db,a,t,i=None,d=None):db.add(Audit(action=a,object_type=t,object_id=i,detail=d))
