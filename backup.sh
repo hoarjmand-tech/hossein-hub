@@ -8,9 +8,8 @@ docker exec hossein-hub-postgres pg_dump --clean --if-exists -U "${POSTGRES_USER
 tar -czf "$TMP/archive.tar.gz" archive
 SYSTEM_ITEMS=(config)
 [ -f .env ] && SYSTEM_ITEMS+=(.env)
-[ -d secrets/connectors ] && SYSTEM_ITEMS+=(secrets/connectors)
-[ -d secrets/netops ] && SYSTEM_ITEMS+=(secrets/netops)
-tar -czf "$TMP/system.tar.gz" "${SYSTEM_ITEMS[@]}"
+[ -d secrets ] && SYSTEM_ITEMS+=(secrets)
+tar --exclude='secrets/backup_key' -czf "$TMP/system.tar.gz" "${SYSTEM_ITEMS[@]}"
 for F in database.sql.gz archive.tar.gz system.tar.gz;do openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -in "$TMP/$F" -out "$DEST/$F.enc" -pass file:"$KEY";done
 sha256sum "$DEST/"*.enc > "$DEST/SHA256SUMS"
 find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +
