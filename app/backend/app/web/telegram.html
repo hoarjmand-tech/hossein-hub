@@ -24,7 +24,7 @@
 <a class="card mod" href="/admin"><div class="ico">👥</div><h3>کاربران</h3><div class="badge">مدیریت دسترسی</div></a>
 </div>
 
-<a class="btn" href="/">باز کردن داشبورد کامل</a>
+<div class="card" style="margin-top:12px"><h3 style="margin-top:0">سلامت زیرساخت</h3><div id="infraHealth" class="sub">در حال دریافت…</div></div><a class="btn" href="/">باز کردن داشبورد کامل</a>
 <h3>آخرین اسناد</h3><div id="list"></div>
 
 <script>
@@ -36,7 +36,7 @@ function clean(v){return String(v??"").replace(/[&<>]/g,"")}
  if(!init)throw Error("این صفحه را از داخل بات تلگرام باز کن.");
  let a=await post("login");who.textContent="سلام "+(a.user.first_name||a.user.username||"");
  let d=await post("dashboard");docs.textContent=d.documents;
- let ov=await get("/api/overview");assets.textContent=ov.assets;down.textContent=ov.assets_down;alerts.textContent=ov.alerts_open;
+ let ov=await get("/api/overview");assets.textContent=ov.assets;down.textContent=ov.assets_down;alerts.textContent=ov.alerts_open;let hs=await get("/api/infra-history/summary?hours=24");infraHealth.innerHTML=Object.entries(hs).map(([k,v])=>"<div style='display:flex;justify-content:space-between;padding:5px 0'><span>"+clean(k)+"</span><b class='"+(v.last_status==="up"?"ok":"bad")+"'>"+(v.uptime_pct==null?"—":v.uptime_pct+"%")+"</b></div>").join("");
  let x=await post("documents");list.innerHTML=x.map(v=>"<div class='doc'><b>"+clean(v.title)+"</b><div class='badge'>"+clean(v.category)+(v.expiry_date?" · "+clean(v.expiry_date):"")+"</div></div>").join("")||"<div class='sub'>سندی ثبت نشده است.</div>";
 }catch(e){who.textContent=e.message}})();
 </script></body></html>
