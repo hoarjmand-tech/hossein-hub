@@ -4,7 +4,7 @@
 <main class="w">
 <div class="grid">
 <section class="p"><h2>Automation Tasks</h2><table><thead><tr><th>نام</th><th>نوع</th><th>Interval</th><th>Status</th><th>Action</th></tr></thead><tbody id="tasks"></tbody></table></section>
-<section class="p"><h2>Task جدید</h2><input id="name" placeholder="نام Task"><select id="kind"><option value="it_check_all">IT Health Check</option><option value="compliance_scan">NetOps Compliance Scan</option><option value="daily_summary">Daily Telegram Summary</option></select><input id="mins" type="number" min="5" value="60" placeholder="Interval minutes"><textarea id="cfg" placeholder='{"policies":[{"name":"Policy","forbid":["ip http server"],"require_any":["ssh","https"]}]}'></textarea><button onclick="addTask()">ایجاد Task</button><div id="msg"></div></section>
+<section class="p"><h2>Task جدید</h2><input id="name" placeholder="نام Task"><select id="kind"><option value="it_check_all">IT Health Check</option><option value="compliance_scan">NetOps Compliance Scan</option><option value="daily_summary">Daily Telegram Summary</option><option value="topology_collect">Topology Discovery</option></select><input id="mins" type="number" min="5" value="60" placeholder="Interval minutes"><textarea id="cfg" placeholder='{"policies":[{"name":"Policy","forbid":["ip http server"],"require_any":["ssh","https"]}]}'></textarea><button onclick="addTask()">ایجاد Task</button><div id="msg"></div></section>
 </div>
 <section class="p"><h2>Compliance Results</h2><button onclick="loadCompliance()">Refresh Compliance</button><table><thead><tr><th>Device</th><th>Policy</th><th>Status</th><th>Detail</th><th>Time</th></tr></thead><tbody id="comp"></tbody></table></section>
 </main>
