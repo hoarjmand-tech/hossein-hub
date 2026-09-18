@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .core import get_db
 from .auth import current_user
-from .models import Document,ManagedAsset,SystemAlert,Audit,NetworkChangeJob,DeviceConfigSnapshot,ComplianceResult,AutomationTask
+from .models import Document,ManagedAsset,SystemAlert,Audit,NetworkChangeJob,DeviceConfigSnapshot,ComplianceResult,AutomationTask,NetworkNeighborSnapshot,NetworkConfigTemplate,NetworkChangePolicy
 r=APIRouter(prefix="/api/reports",dependencies=[Depends(current_user)])
 @r.get("/documents.csv")
 def docs(db:Session=Depends(get_db)):
@@ -53,3 +53,22 @@ def automation_csv(db:Session=Depends(get_db)):
  b=io.StringIO();w=csv.writer(b);w.writerow(["name","kind","interval_minutes","enabled","last_status","last_run","next_run","last_error"])
  for x in db.scalars(select(AutomationTask).order_by(AutomationTask.name)):w.writerow([x.name,x.kind,x.interval_minutes,x.enabled,x.last_status,x.last_run or "",x.next_run or "",x.last_error or ""])
  return StreamingResponse(iter([b.getvalue()]),media_type="text/csv; charset=utf-8",headers={"Content-Disposition":"attachment; filename=automation.csv"})
+
+@r.get("/topology.csv")
+def topology_csv(db:Session=Depends(get_db)):
+ b=io.StringIO();w=csv.writer(b);w.writerow(["local_device","local_interface","neighbor_name","neighbor_ip","neighbor_interface","platform","protocol","collected_at"])
+ for x in db.scalars(select(NetworkNeighborSnapshot).order_by(NetworkNeighborSnapshot.collected_at.desc()).limit(10000)):
+  w.writerow([x.local_device_name,x.local_interface or "",x.neighbor_name or "",x.neighbor_ip or "",x.neighbor_interface or "",x.platform or "",x.protocol,x.collected_at])
+ return StreamingResponse(iter([b.getvalue()]),media_type="text/csv; charset=utf-8",headers={"Content-Disposition":"attachment; filename=topology.csv"})
+
+@r.get("/netops-templates.csv")
+def templates_csv(db:Session=Depends(get_db)):
+ b=io.StringIO();w=csv.writer(b);w.writerow(["name","vendor","role","enabled","description","created_at"])
+ for x in db.scalars(select(NetworkConfigTemplate).order_by(NetworkConfigTemplate.name)):w.writerow([x.name,x.vendor,x.role,x.enabled,x.description or "",x.created_at])
+ return StreamingResponse(iter([b.getvalue()]),media_type="text/csv; charset=utf-8",headers={"Content-Disposition":"attachment; filename=netops-templates.csv"})
+
+@r.get("/netops-policies.csv")
+def policies_csv(db:Session=Depends(get_db)):
+ b=io.StringIO();w=csv.writer(b);w.writerow(["name","enabled","require_precheck","require_postcheck","require_rollback","blocked_patterns","created_at"])
+ for x in db.scalars(select(NetworkChangePolicy).order_by(NetworkChangePolicy.created_at.desc())):w.writerow([x.name,x.enabled,x.require_precheck,x.require_postcheck,x.require_rollback,x.blocked_patterns_json or "[]",x.created_at])
+ return StreamingResponse(iter([b.getvalue()]),media_type="text/csv; charset=utf-8",headers={"Content-Disposition":"attachment; filename=netops-policies.csv"})
