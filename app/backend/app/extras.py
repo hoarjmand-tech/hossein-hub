@@ -6,12 +6,12 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .core import get_db,ARCHIVE_ROOT
-from .auth import current_user
+from .auth import current_user,csrf_guard
 from .models import Document,DocumentVersion,ShareLink,Reminder,Audit
 r=APIRouter()
 DOCS=ARCHIVE_ROOT/"documents"
 def hh(x):return hashlib.sha256(x.encode()).hexdigest()
-@r.post("/api/archive/documents/{did}/share",dependencies=[Depends(current_user)])
+@r.post("/api/archive/documents/{did}/share",dependencies=[Depends(current_user),Depends(csrf_guard)])
 def share(did:str,hours:int=Form(24),max_downloads:int=Form(1),db:Session=Depends(get_db)):
  d=db.get(Document,did)
  if not d or d.deleted:raise HTTPException(404)
