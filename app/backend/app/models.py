@@ -42,3 +42,6 @@ class CheckResult(Base):
  __tablename__="check_results"; id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid); asset_id:Mapped[str]=mapped_column(ForeignKey("managed_assets.id"),index=True); status:Mapped[str]=mapped_column(String(30),index=True); latency_ms:Mapped[int|None]=mapped_column(Integer); message:Mapped[str|None]=mapped_column(Text); checked_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
 class SystemAlert(Base):
  __tablename__="system_alerts"; id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid); asset_id:Mapped[str|None]=mapped_column(ForeignKey("managed_assets.id"),index=True); severity:Mapped[str]=mapped_column(String(30),index=True); title:Mapped[str]=mapped_column(String(300)); body:Mapped[str|None]=mapped_column(Text); acknowledged:Mapped[bool]=mapped_column(Boolean,default=False,index=True); created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
+
+class ConnectorSample(Base):
+ __tablename__="connector_samples"; id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid); connector:Mapped[str]=mapped_column(String(80),index=True); status:Mapped[str]=mapped_column(String(30),index=True); summary_json:Mapped[str|None]=mapped_column(Text); sampled_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
