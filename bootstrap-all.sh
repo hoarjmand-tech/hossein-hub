@@ -83,6 +83,10 @@ for i in {1..60}; do
 done
 
 echo "[12/12] Final status"
+if ! find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d -print -quit | grep -q .; then
+  echo "Initial encrypted backup"
+  bash "$ROOT/backup.sh"
+fi
 docker compose -f docker-compose.yml ps
 echo
 curl -fsS http://192.168.1.35:8080/health && echo
