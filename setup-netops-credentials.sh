@@ -24,13 +24,13 @@ p=Path(sys.argv[1]);profile=sys.argv[2]
 try:d=json.loads(p.read_text())
 except:d=[]
 for x in d:
-    if x.get("discovered") and not x.get("username_file"):
+    if x.get("enabled", True) and not x.get("username_file"):
         x["username_file"]=f"profile-{profile}.user"
         x["password_file"]=f"profile-{profile}.password"
         ep=Path(p.parent/f"profile-{profile}.enable")
         if ep.exists():x["enable_secret_file"]=ep.name
 p.write_text(json.dumps(d,ensure_ascii=False,indent=2))
-print("Profile assigned to discovered devices without credentials.")
+print("Profile assigned to enabled devices without credentials.")
 PY
 
 cd "$ROOT"
