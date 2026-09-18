@@ -63,3 +63,16 @@ def logout(request:Request,response:Response,db:Session=Depends(get_db)):
  tok=request.cookies.get(COOKIE)
  if tok:db.execute(delete(SessionToken).where(SessionToken.token_hash==h(tok)));db.commit()
  response.delete_cookie(COOKIE,path="/");return {"ok":True}
+
+@r.get("/sessions")
+def sessions(request:Request,db:Session=Depends(get_db)):
+ u=current_user(request,db);tok=request.cookies.get(COOKIE);current_hash=h(tok) if tok else ""
+ rows=list(db.scalars(select(SessionToken).where(SessionToken.user_id==u.id).order_by(SessionToken.created_at.desc())))
+ return [{"id":x.id,"current":x.token_hash==current_hash,"created_at":x.created_at,"expires_at":x.expires_at} for x in rows]
+
+@r.post("/sessions/revoke-others")
+def revoke_other_sessions(request:Request,db:Session=Depends(get_db)):
+ u=current_user(request,db);csrf_guard(request,db);tok=request.cookies.get(COOKIE);current_hash=h(tok) if tok else ""
+ db.execute(delete(SessionToken).where(SessionToken.user_id==u.id,SessionToken.token_hash!=current_hash))
+ db.add(Audit(action="sessions.revoke_others",object_type="auth",object_id=u.id));db.commit()
+ return {"ok":True}
