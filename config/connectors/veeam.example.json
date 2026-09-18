@@ -1,0 +1,7 @@
+{
+  "host": "VEEAM_SERVER_IP",
+  "port": 9419,
+  "scheme": "https",
+  "api_version": "1.2-rev1",
+  "verify_tls": false
+}
