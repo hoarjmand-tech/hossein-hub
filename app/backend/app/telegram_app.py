@@ -1,13 +1,14 @@
 import os,json,hmac,hashlib,time
 from pathlib import Path
 from urllib.parse import parse_qsl
-from fastapi import APIRouter,HTTPException,Header
+from fastapi import APIRouter,HTTPException,Header,Depends,Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select,func
 from sqlalchemy.orm import Session
 from .core import get_db,ARCHIVE_ROOT
-from .models import Document,Reminder
+from .models import Document,Reminder,User
+from .auth import issue
 r=APIRouter(prefix="/api/telegram")
 def secret(p):
  try:return Path(p).read_text().strip()
@@ -29,9 +30,13 @@ def validate(raw):
  if not ADMIN_ID or str(user.get("id",""))!=ADMIN_ID:raise HTTPException(403,"Telegram account is not authorized")
  return user
 @r.post("/login")
-def login(x:Init):
+def login(x:Init,response:Response,db:Session=Depends(get_db)):
  if not TOKEN:raise HTTPException(503,"Telegram not configured")
- u=validate(x.init_data);return {"ok":True,"user":{"id":u.get("id"),"first_name":u.get("first_name"),"username":u.get("username")}}
+ u=validate(x.init_data)
+ account=db.scalar(select(User).where(User.active==True,User.is_admin==True).order_by(User.created_at))
+ if not account:raise HTTPException(503,"No active admin account exists")
+ s=issue(account,response,db,"telegram.login")
+ return {"ok":True,"user":{"id":u.get("id"),"first_name":u.get("first_name"),"username":u.get("username")},"csrf":s["csrf"]}
 @r.post("/dashboard")
 def dashboard(x:Init,db:Session=__import__("fastapi").Depends(get_db)):
  validate(x.init_data)
