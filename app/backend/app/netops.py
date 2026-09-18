@@ -62,6 +62,17 @@ def admin(u=Depends(current_user)):
 class ImportDiscovered(BaseModel):
  devices:list[dict]
 
+class DeviceCreate(BaseModel):
+ id:str|None=None
+ name:str=Field(min_length=1,max_length=200)
+ host:str=Field(min_length=1,max_length=300)
+ port:int=22
+ device_type:str="cisco_ios"
+ site:str="HQ"
+ role:str="network"
+ enabled:bool=True
+ save_after:bool=True
+
 class DevicePatch(BaseModel):
  name:str|None=None
  host:str|None=None
@@ -202,3 +213,21 @@ def patch_device(device_id:str,x:DevicePatch,db:Session=Depends(get_db),u=Depend
  _save_inv(devices)
  db.add(Audit(action="netops.device.update",object_type="network_device",object_id=device_id,detail=f"{d.get('name') or device_id} by {u.username}"));db.commit()
  return {"ok":True,"device":{k:d.get(k) for k in ("id","name","host","port","device_type","site","role","enabled","save_after")}}
+
+@r.post("/devices",dependencies=[Depends(csrf_guard)])
+def add_device(x:DeviceCreate,db:Session=Depends(get_db),u=Depends(admin)):
+ devices=inv()
+ did=(x.id or ("manual-"+x.host.replace(".","-").replace(":","-"))).strip()
+ if any(str(d.get("id"))==did or str(d.get("host"))==x.host for d in devices):raise HTTPException(409,"Device ID or host already exists")
+ d=x.model_dump();d["id"]=did;d["discovered"]=False
+ devices.append(d);_save_inv(devices)
+ db.add(Audit(action="netops.device.create",object_type="network_device",object_id=did,detail=f"{x.name} by {u.username}"));db.commit()
+ return {"ok":True,"id":did}
+
+@r.delete("/devices/{device_id}",dependencies=[Depends(csrf_guard)])
+def delete_device(device_id:str,db:Session=Depends(get_db),u=Depends(admin)):
+ devices=inv();d=next((z for z in devices if str(z.get("id"))==device_id),None)
+ if not d:raise HTTPException(404,"Device not found")
+ devices=[z for z in devices if str(z.get("id"))!=device_id];_save_inv(devices)
+ db.add(Audit(action="netops.device.delete",object_type="network_device",object_id=device_id,detail=f"{d.get('name') or device_id} by {u.username}"));db.commit()
+ return {"ok":True}
