@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .core import get_db,ARCHIVE_ROOT
-from .auth import current_user,csrf_guard,csrf_guard
+from .auth import current_user,csrf_guard
 from .models import Document,DocumentVersion,ShareLink,Reminder,Audit
 r=APIRouter()
 DOCS=ARCHIVE_ROOT/"documents"
@@ -28,3 +28,12 @@ def reminder_done(rid:str,db:Session=Depends(get_db)):
  x=db.get(Reminder,rid)
  if not x:raise HTTPException(404)
  x.done=True;db.commit();return {"ok":True}
+
+@r.get("/api/archive/shares",dependencies=[Depends(current_user)])
+def shares(db:Session=Depends(get_db)):
+ return [{"id":x.id,"document_id":x.document_id,"expires_at":x.expires_at,"max_downloads":x.max_downloads,"downloads":x.downloads,"active":x.active} for x in db.scalars(select(ShareLink).order_by(ShareLink.created_at.desc()).limit(100))]
+@r.delete("/api/archive/shares/{sid}",dependencies=[Depends(current_user),Depends(csrf_guard)])
+def revoke(sid:str,db:Session=Depends(get_db)):
+ x=db.get(ShareLink,sid)
+ if not x:raise HTTPException(404)
+ x.active=False;db.commit();return {"ok":True}
