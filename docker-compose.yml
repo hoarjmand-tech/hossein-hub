@@ -69,10 +69,25 @@ services:
     environment:
       TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
       TELEGRAM_APP_URL: https://hossein-hub.tailf8fccb.ts.net/telegram
-      TELEGRAM_PROXY: socks5h://host.docker.internal:10808
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
+    network_mode: host
     secrets: [telegram_bot_token]
+
+  monitor-worker:
+    build: ./app/backend
+    container_name: hossein-hub-monitor
+    restart: unless-stopped
+    command: ["python","-m","app.monitor_worker"]
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      HUB_API_KEY_FILE: /run/secrets/hub_api_key
+    secrets: [postgres_password,hub_api_key]
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks: [hub-backend]
 
   nginx:
