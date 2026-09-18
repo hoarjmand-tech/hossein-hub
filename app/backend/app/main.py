@@ -25,8 +25,10 @@ from .netops import r as netops_router
 from .netops_discovery import r as netops_discovery_router
 from .netops_config import r as netops_config_router
 from .automation_api import r as automation_router
+from .netops_library import r as netops_library_router
+from .topology import r as topology_router
 Base.metadata.create_all(engine)
-app=FastAPI(title="Hossein Hub",version="2.0.0")
+app=FastAPI(title="Hossein Hub",version="2.1.0")
 app.include_router(auth_router)
 app.include_router(archive_router)
 app.include_router(extras_router)
@@ -48,6 +50,8 @@ app.include_router(netops_router)
 app.include_router(netops_discovery_router)
 app.include_router(netops_config_router)
 app.include_router(automation_router)
+app.include_router(netops_library_router)
+app.include_router(topology_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
@@ -88,6 +92,14 @@ def telegram_miniapp(): return FileResponse(WEB/"telegram.html",headers=NO_CACHE
 def shares_home(): return FileResponse(WEB/"shares.html",headers=NO_CACHE)
 @app.get("/automation",include_in_schema=False)
 def automation_home(): return FileResponse(WEB/"automation.html",headers=NO_CACHE)
+@app.get("/netops-library",include_in_schema=False)
+def netops_library_home(): return FileResponse(WEB/"netops_library.html",headers=NO_CACHE)
+@app.get("/inventory",include_in_schema=False)
+def inventory_home(): return FileResponse(WEB/"inventory.html",headers=NO_CACHE)
+@app.get("/topology",include_in_schema=False)
+def topology_home(): return FileResponse(WEB/"topology.html",headers=NO_CACHE)
+@app.get("/command-center",include_in_schema=False)
+def command_center_home(): return FileResponse(WEB/"command_center.html",headers=NO_CACHE)
 @app.get("/archive",include_in_schema=False)
 def archive_home(): return FileResponse(WEB/"index.html",headers=NO_CACHE)
 @app.get("/manifest.json",include_in_schema=False)
@@ -97,4 +109,4 @@ def sw(): return FileResponse(WEB/"sw.js",media_type="application/javascript",he
 @app.get("/health")
 def health():
  with engine.connect() as c:c.execute(text("select 1"))
- return {"status":"ok","database":"ok","module":"hub","version":"2.0.0"}
+ return {"status":"ok","database":"ok","module":"hub","version":"2.1.0"}
