@@ -3,17 +3,20 @@ set -Eeuo pipefail
 cd /opt/hossein-hub
 mkdir -p data/tailscale
 docker compose -f docker-compose.yml up -d tailscale
-echo "Checking Tailscale..."
-if ! docker exec hossein-hub-tailscale tailscale ip -4 >/dev/null 2>&1; then
-  docker exec -it hossein-hub-tailscale tailscale up --hostname hossein-hub --accept-dns=false
+echo "Waiting for Tailscale..."
+STATE=$(docker exec hossein-hub-tailscale tailscale status --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("BackendState",""))' 2>/dev/null || true)
+if [ "$STATE" != "Running" ]; then
+  echo "Tailscale is not authenticated in this container."
+  echo "Run the login command shown by Tailscale once, approve it, then rerun this script."
+  docker exec hossein-hub-tailscale tailscale up --hostname hossein-hub --accept-dns=false || true
+  exit 2
 fi
 TSIP=$(docker exec hossein-hub-tailscale tailscale ip -4 | head -1)
-echo "Tailscale IP: $TSIP"
-echo "Enabling private HTTPS proxy..."
+DNS=$(docker exec hossein-hub-tailscale tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("Self",{}).get("DNSName","").rstrip("."))')
+echo "Tailscale connected: $TSIP"
 docker exec hossein-hub-tailscale tailscale serve reset >/dev/null 2>&1 || true
 docker exec hossein-hub-tailscale tailscale serve --bg --https=443 http://192.168.1.35:8080
 echo
 docker exec hossein-hub-tailscale tailscale serve status
 echo
-DNS=$(docker exec hossein-hub-tailscale tailscale status --json 2>/dev/null | python3 -c 'import json,sys; x=json.load(sys.stdin); print(x.get("Self",{}).get("DNSName","").rstrip("."))' 2>/dev/null || true)
-if [ -n "$DNS" ]; then echo "HOSSEIN HUB HTTPS: https://$DNS"; else echo "HTTPS enabled through Tailscale Serve."; fi
+echo "HOSSEIN HUB HTTPS: https://$DNS"
