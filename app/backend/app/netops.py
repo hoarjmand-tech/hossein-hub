@@ -51,7 +51,9 @@ def _change_policy_check(db,x):
 
 def _save_inv(devices):
  ROOT.mkdir(parents=True,exist_ok=True)
- INV.write_text(json.dumps(devices,ensure_ascii=False,indent=2))
+ tmp=INV.with_suffix(".tmp")
+ tmp.write_text(json.dumps(devices,ensure_ascii=False,indent=2))
+ tmp.replace(INV)
 
 def admin(u=Depends(current_user)):
  if not u.is_admin:raise HTTPException(403,"Admin required")
@@ -84,7 +86,7 @@ class Change(BaseModel):
 
 @r.get("/devices")
 def devices(u=Depends(admin)):
- return [{k:d.get(k) for k in ("id","name","host","port","device_type","site","role","enabled")} for d in inv()]
+ return [{k:d.get(k) for k in ("id","name","host","port","device_type","site","role","enabled","save_after","connection_ok","last_test","last_prompt","last_error","discovered")} for d in inv()]
 
 @r.get("/jobs")
 def jobs(limit:int=100,db:Session=Depends(get_db),u=Depends(admin)):
@@ -135,7 +137,7 @@ def import_discovered(x:ImportDiscovered,u=Depends(admin)):
   if before: updated+=1
   else: added+=1
  ROOT.mkdir(parents=True,exist_ok=True)
- INV.write_text(json.dumps(list(byid.values()),ensure_ascii=False,indent=2))
+ _save_inv(list(byid.values()))
  return {"ok":True,"added":added,"updated":updated,"total":len(byid)}
 
 @r.post("/devices/test-all",dependencies=[Depends(csrf_guard)])
@@ -153,7 +155,7 @@ def test_all(u=Depends(admin)):
   except Exception as e:
    d["connection_ok"]=False;d["last_test"]=datetime.utcnow().isoformat()+"Z";d["last_error"]=str(e)[:500];changed=True
    results.append({"id":d.get("id"),"name":d.get("name"),"host":d.get("host"),"ok":False,"error":str(e)[:500]})
- if changed:INV.write_text(json.dumps(devices,ensure_ascii=False,indent=2))
+ if changed:_save_inv(devices)
  return {"total":len(results),"ok":sum(1 for x in results if x["ok"]),"failed":sum(1 for x in results if not x["ok"]),"results":results}
 
 @r.get("/devices/{device_id}")
