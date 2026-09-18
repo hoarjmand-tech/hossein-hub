@@ -30,7 +30,11 @@ def main():
     elif chat and ADMIN_ID and str(chat)==ADMIN_ID and txt.split("@")[0] in ("/start","/app"):
      call("sendMessage",chat_id=chat,text="Hossein Hub\nدسترسی امن به داشبورد شخصی، آرشیو و سرویس‌ها.",reply_markup=keyboard())
     elif chat and ADMIN_ID and str(chat)==ADMIN_ID and txt.split("@")[0]=="/status":
-     call("sendMessage",chat_id=chat,text="Hossein Hub فعال است. برای جزئیات Mini App را باز کن.",reply_markup=keyboard())
+     try:
+      h=requests.get("http://127.0.0.1:8080/health",timeout=5).json()
+      msg=f"Hossein Hub: {h.get('status','unknown')}\nDatabase: {h.get('database','unknown')}\nVersion: {h.get('version','')}"
+     except Exception as e: msg="Hossein Hub: health check failed"
+     call("sendMessage",chat_id=chat,text=msg,reply_markup=keyboard())
   except Exception as e:
    print("telegram:",type(e).__name__,str(e)[:180],flush=True);time.sleep(5)
 if __name__=="__main__":main()
