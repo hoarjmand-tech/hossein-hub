@@ -73,7 +73,7 @@ services:
       TELEGRAM_APP_URL: https://hossein-hub.tailf8fccb.ts.net/telegram
       TELEGRAM_PROXY: socks5h://127.0.0.1:10808
     network_mode: host
-    secrets: [telegram_bot_token]
+    secrets: [telegram_bot_token,telegram_admin_id]
 
   monitor-worker:
     build: ./app/backend
