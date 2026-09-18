@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .auth import current_user,csrf_guard
 from .core import get_db
-from .models import NetworkChangeJob,Audit,NetworkChangePolicy
+from .models import NetworkChangeJob,Audit,NetworkChangePolicy,NetworkChangeValidation
 r=APIRouter(prefix="/api/netops",dependencies=[Depends(current_user)])
 ROOT=Path(os.getenv("NETOPS_SECRETS_ROOT","/run/netops-secrets"))
 INV=ROOT/"devices.json"
@@ -79,6 +79,8 @@ class Change(BaseModel):
  precheck:list[str]=Field(default_factory=list,max_length=100)
  postcheck:list[str]=Field(default_factory=list,max_length=100)
  rollback:list[str]=Field(default_factory=list,max_length=500)
+ must_include:list[str]=Field(default_factory=list,max_length=100)
+ must_not_include:list[str]=Field(default_factory=list,max_length=100)
 
 @r.get("/devices")
 def devices(u=Depends(admin)):
@@ -93,7 +95,9 @@ def jobs(limit:int=100,db:Session=Depends(get_db),u=Depends(admin)):
 def job(jid:str,db:Session=Depends(get_db),u=Depends(admin)):
  x=db.get(NetworkChangeJob,jid)
  if not x:raise HTTPException(404)
- return {k:getattr(x,k) for k in ("id","device_id","device_name","requested_by","status","change_commands","precheck_commands","postcheck_commands","rollback_commands","backup_text","precheck_output","change_output","postcheck_output","error","created_at","started_at","finished_at")}
+ v=db.scalar(select(NetworkChangeValidation).where(NetworkChangeValidation.job_id==jid))
+ return {"job":{k:getattr(x,k) for k in ("id","device_id","device_name","requested_by","status","change_commands","precheck_commands","postcheck_commands","rollback_commands","backup_text","precheck_output","change_output","postcheck_output","error","created_at","started_at","finished_at")},
+ "validation":None if not v else {"status":v.status,"detail":v.detail,"must_include":json.loads(v.must_include_json or "[]"),"must_not_include":json.loads(v.must_not_include_json or "[]"),"checked_at":v.checked_at}}
 
 @r.post("/jobs",dependencies=[Depends(csrf_guard)])
 def create(x:Change,db:Session=Depends(get_db),u=Depends(admin)):
@@ -102,7 +106,7 @@ def create(x:Change,db:Session=Depends(get_db),u=Depends(admin)):
  _change_policy_check(db,x)
  j=NetworkChangeJob(device_id=x.device_id,device_name=d.get("name") or x.device_id,requested_by=u.username,status="queued",
   change_commands="\n".join(x.commands),precheck_commands="\n".join(x.precheck),postcheck_commands="\n".join(x.postcheck),rollback_commands="\n".join(x.rollback))
- db.add(j);db.flush();db.add(Audit(action="netops.change.queue",object_type="network_device",object_id=j.id,detail=f"{j.device_name} by {u.username}"));db.commit()
+ db.add(j);db.flush();db.add(NetworkChangeValidation(job_id=j.id,must_include_json=json.dumps(x.must_include),must_not_include_json=json.dumps(x.must_not_include)));db.add(Audit(action="netops.change.queue",object_type="network_device",object_id=j.id,detail=f"{j.device_name} by {u.username}"));db.commit()
  return {"ok":True,"job_id":j.id,"status":"queued"}
 
 @r.post("/devices/import-discovered",dependencies=[Depends(csrf_guard)])
