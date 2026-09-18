@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse,StreamingResponse
 from sqlalchemy import select,or_,func
 from sqlalchemy.orm import Session
 from .core import get_db,ARCHIVE_ROOT,MAX_UPLOAD
-from .auth import current_user,csrf_guard
+from .auth import current_user,csrf_guard_guard
 from .models import *
 from .schemas import *
 from .services import extract_text,thumbnail
