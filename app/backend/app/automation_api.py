@@ -19,7 +19,7 @@ class TaskState(BaseModel):
 
 class TaskIn(BaseModel):
  name:str=Field(min_length=1,max_length=200)
- kind:str=Field(pattern="^(it_check_all|compliance_scan|daily_summary)$")
+ kind:str=Field(pattern="^(it_check_all|compliance_scan|daily_summary|topology_collect)$")
  interval_minutes:int=Field(ge=5,le=10080)
  enabled:bool=True
  config:dict={}
@@ -30,7 +30,8 @@ def ensure_defaults(db):
   AutomationTask(name="IT Health Check",kind="it_check_all",interval_minutes=5,enabled=True,next_run=datetime.utcnow()),
   AutomationTask(name="NetOps Compliance",kind="compliance_scan",interval_minutes=60,enabled=True,
    config_json=json.dumps({"policies":[{"name":"No HTTP server on network devices","forbid":["ip http server","set admin-http enable"]},{"name":"SSH/HTTPS management expected","require_any":["ssh","https","admin-https"]}]},ensure_ascii=False),next_run=datetime.utcnow()),
-  AutomationTask(name="Daily Management Summary",kind="daily_summary",interval_minutes=1440,enabled=True,next_run=datetime.utcnow())
+  AutomationTask(name="Daily Management Summary",kind="daily_summary",interval_minutes=1440,enabled=True,next_run=datetime.utcnow()),
+  AutomationTask(name="Topology Discovery",kind="topology_collect",interval_minutes=360,enabled=True,next_run=datetime.utcnow())
  ]
  db.add_all(defaults);db.commit()
 
