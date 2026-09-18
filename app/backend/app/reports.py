@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .core import get_db
 from .auth import current_user
-from .models import Document,ManagedAsset,SystemAlert,Audit,NetworkChangeJob,DeviceConfigSnapshot
+from .models import Document,ManagedAsset,SystemAlert,Audit,NetworkChangeJob,DeviceConfigSnapshot,ComplianceResult,AutomationTask
 r=APIRouter(prefix="/api/reports",dependencies=[Depends(current_user)])
 @r.get("/documents.csv")
 def docs(db:Session=Depends(get_db)):
@@ -41,3 +41,15 @@ def config_snapshots_csv(db:Session=Depends(get_db)):
  b=io.StringIO();w=csv.writer(b);w.writerow(["device","source","sha256","created_at","bytes"])
  for x in db.scalars(select(DeviceConfigSnapshot).order_by(DeviceConfigSnapshot.created_at.desc()).limit(5000)):w.writerow([x.device_name,x.source,x.sha256,x.created_at,len(x.config_text.encode())])
  return StreamingResponse(iter([b.getvalue()]),media_type="text/csv; charset=utf-8",headers={"Content-Disposition":"attachment; filename=config-snapshots.csv"})
+
+@r.get("/compliance.csv")
+def compliance_csv(db:Session=Depends(get_db)):
+ b=io.StringIO();w=csv.writer(b);w.writerow(["device","policy","status","detail","checked_at"])
+ for x in db.scalars(select(ComplianceResult).order_by(ComplianceResult.checked_at.desc()).limit(10000)):w.writerow([x.device_name,x.policy_name,x.status,x.detail or "",x.checked_at])
+ return StreamingResponse(iter([b.getvalue()]),media_type="text/csv; charset=utf-8",headers={"Content-Disposition":"attachment; filename=compliance.csv"})
+
+@r.get("/automation.csv")
+def automation_csv(db:Session=Depends(get_db)):
+ b=io.StringIO();w=csv.writer(b);w.writerow(["name","kind","interval_minutes","enabled","last_status","last_run","next_run","last_error"])
+ for x in db.scalars(select(AutomationTask).order_by(AutomationTask.name)):w.writerow([x.name,x.kind,x.interval_minutes,x.enabled,x.last_status,x.last_run or "",x.next_run or "",x.last_error or ""])
+ return StreamingResponse(iter([b.getvalue()]),media_type="text/csv; charset=utf-8",headers={"Content-Disposition":"attachment; filename=automation.csv"})
