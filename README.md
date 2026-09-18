@@ -12,3 +12,12 @@ docker compose up -d --build
 curl http://127.0.0.1:8080/health
 ```
 API docs: http://127.0.0.1:8080/docs
+
+
+## Remote access
+Sensitive administration is designed for Tailscale rather than direct Internet exposure.
+After normal deployment, enroll the host once with `bash remote-access.sh`.
+The LAN application remains available on `192.168.1.35:8080`. Do not port-forward SSH or the archive API directly from the Internet.
+
+## Backups
+Run `bash backup.sh` to create a timestamped PostgreSQL dump, archive snapshot, and SHA-256 manifest under `backups/`.
