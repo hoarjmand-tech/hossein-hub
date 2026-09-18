@@ -61,6 +61,20 @@ services:
       - ./archive:/archive
     networks: [hub-backend]
 
+  telegram-bot:
+    build: ./app/backend
+    container_name: hossein-hub-telegram
+    restart: unless-stopped
+    command: ["python","-m","app.telegram_bot"]
+    environment:
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_APP_URL: https://hossein-hub.tailf8fccb.ts.net/telegram
+      TELEGRAM_PROXY: socks5h://host.docker.internal:10808
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    secrets: [telegram_bot_token]
+    networks: [hub-backend]
+
   nginx:
     image: nginx:1.27-alpine
     container_name: hossein-hub-nginx
