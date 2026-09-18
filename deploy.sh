@@ -12,4 +12,4 @@ if [ -f compose.yml ]; then mv compose.yml compose.yml.legacy-disabled; fi
 echo "[10/10] Compose cleanup";docker compose -f docker-compose.yml build
 echo "[8/10] Start";docker compose -f docker-compose.yml up -d --remove-orphans
 echo "[9/10] Health";for i in {1..45};do if curl -fsS http://192.168.1.35:8080/health >/tmp/hub-health 2>/dev/null;then cat /tmp/hub-health;echo;echo "DEPLOY OK";echo "API key is stored only in /opt/hossein-hub/secrets/hub_api_key";exit 0;fi;sleep 2;done
-docker compose -f docker-compose.yml ps;docker compose -f docker-compose.yml logs --tail=150 archive-api;exit 1
+docker compose -f docker-compose.yml ps;docker compose -f docker-compose.yml logs --tail=150 archive-api ocr-worker;exit 1
