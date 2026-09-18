@@ -34,6 +34,11 @@ services:
     volumes:
       - ./archive:/archive
     expose: ["8080"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks: [hub-backend]
   ocr-worker:
     build: ./app/backend
