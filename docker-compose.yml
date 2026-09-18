@@ -6,19 +6,26 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - ./postgres:/var/lib/postgresql/data
+    networks: [backend]
     healthcheck:
       test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+
   archive-api:
     build: ./app/backend
     container_name: hossein-hub-archive
     restart: unless-stopped
     env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      ARCHIVE_ROOT: /archive
     depends_on:
       postgres:
         condition: service_healthy
@@ -26,3 +33,11 @@ services:
       - ./archive:/archive
     ports:
       - "127.0.0.1:8080:8080"
+    networks: [backend]
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+networks:
+  backend:
+    name: hossein-hub-backend
