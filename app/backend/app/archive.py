@@ -40,10 +40,9 @@ def create(file:UploadFile=File(...),title:str=Form(...),category:str=Form("othe
  d=Document(title=title,category=category,subtype=subtype,person_id=person_id or None,case_id=case_id or None,country=country,issuer=issuer,document_number=document_number,issue_date=issue_date,expiry_date=expiry_date,notes=notes);db.add(d);db.flush()
  ext=Path(file.filename or "").suffix.lower()[:15];name=f"{d.id}/v1-{uuid.uuid4()}{ext}";target=DOCS/name;target.parent.mkdir(parents=True,exist_ok=True);tmp.replace(target)
  v=DocumentVersion(document_id=d.id,version=1,kind=kind,original_name=file.filename or "file",stored_name=name,mime_type=mime,size=size,sha256=sha);db.add(v);db.flush()
- v.ocr_text=extract_text(target,mime);v.ocr_status="done" if v.ocr_text else "empty";thumbnail(target,mime,PREV/f"{v.id}.jpg")
  for n in [z.strip().lower() for z in (tags or "").split(",") if z.strip()]:
   t=db.scalar(select(Tag).where(Tag.name==n)) or Tag(name=n);db.add(t);db.flush();db.add(DocumentTag(document_id=d.id,tag_id=t.id))
- log(db,"upload","document",d.id,file.filename);db.commit();return {"id":d.id,"version":1,"sha256":sha,"ocr":v.ocr_status}
+ log(db,"upload","document",d.id,file.filename);db.commit();return {"id":d.id,"version":1,"sha256":sha,"ocr":"pending"}
 @r.post("/documents/{did}/versions")
 def version(did:str,file:UploadFile=File(...),kind:str=Form("updated"),db:Session=Depends(get_db)):
  d=db.get(Document,did)
@@ -53,7 +52,7 @@ def version(did:str,file:UploadFile=File(...),kind:str=Form("updated"),db:Sessio
  mime=detected_mime(tmp)
  if mime!="application/pdf" and not mime.startswith("image/"):tmp.unlink(missing_ok=True);raise HTTPException(415,"Only PDF and image files are allowed")
  n=(db.scalar(select(func.max(DocumentVersion.version)).where(DocumentVersion.document_id==did)) or 0)+1;ext=Path(file.filename or "").suffix.lower()[:15];name=f"{did}/v{n}-{uuid.uuid4()}{ext}";p=DOCS/name;p.parent.mkdir(parents=True,exist_ok=True);tmp.replace(p)
- v=DocumentVersion(document_id=did,version=n,kind=kind,original_name=file.filename or "file",stored_name=name,mime_type=mime,size=size,sha256=sha);db.add(v);db.flush();v.ocr_text=extract_text(p,mime);v.ocr_status="done" if v.ocr_text else "empty";thumbnail(p,mime,PREV/f"{v.id}.jpg");log(db,"version.add","document",did,str(n));db.commit();return {"version":n,"ocr":v.ocr_status}
+ v=DocumentVersion(document_id=did,version=n,kind=kind,original_name=file.filename or "file",stored_name=name,mime_type=mime,size=size,sha256=sha);db.add(v);db.flush();log(db,"version.add","document",did,str(n));db.commit();return {"version":n,"ocr":"pending"}
 @r.get("/documents")
 def docs(q:str|None=None,category:str|None=None,person_id:str|None=None,case_id:str|None=None,deleted:bool=False,favorite:bool|None=None,limit:int=Query(100,le=500),db:Session=Depends(get_db)):
  s=select(Document).where(Document.deleted==deleted)
