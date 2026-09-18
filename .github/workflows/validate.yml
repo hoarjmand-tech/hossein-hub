@@ -1,0 +1,18 @@
+name: Validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m compileall -q app/backend/app app/backend/tests
+      - run: docker compose -f docker-compose.yml config >/dev/null
+        env:
+          POSTGRES_DB: hossein_hub
+          POSTGRES_USER: hubadmin
