@@ -1,5 +1,6 @@
 .env
 secrets/*
+secrets/connectors/
 !secrets/.gitkeep
 postgres/
 archive/
