@@ -42,6 +42,8 @@ WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
 def home(): return FileResponse(WEB/"home.html",headers=NO_CACHE)
+@app.get("/infra",include_in_schema=False)
+def infra_home(): return FileResponse(WEB/"infra.html",headers=NO_CACHE)
 @app.get("/fortigate",include_in_schema=False)
 def fortigate_home(): return FileResponse(WEB/"fortigate.html",headers=NO_CACHE)
 @app.get("/esxi",include_in_schema=False)
