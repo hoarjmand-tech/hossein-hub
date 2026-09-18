@@ -5,6 +5,8 @@ B="${1:-}";KEY="$ROOT/secrets/backup_key"
 [ -d "$B" ] || { echo "Usage: sudo bash restore.sh /opt/hossein-hub/backups/YYYYMMDD-HHMMSS";exit 2; }
 [ -s "$KEY" ] || { echo "Missing backup encryption key";exit 3; }
 (cd "$B" && sha256sum -c SHA256SUMS)
+echo "PRE-RESTORE SAFETY BACKUP"
+bash "$ROOT/backup.sh"
 TMP=$(mktemp -d);trap 'rm -rf "$TMP"' EXIT
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$B/database.sql.gz.enc" -out "$TMP/database.sql.gz" -pass file:"$KEY"
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$B/archive.tar.gz.enc" -out "$TMP/archive.tar.gz" -pass file:"$KEY"
