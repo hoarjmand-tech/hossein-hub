@@ -30,3 +30,6 @@ class SessionToken(Base):
 
 class ShareLink(Base):
  __tablename__="share_links"; id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid); document_id:Mapped[str]=mapped_column(ForeignKey("documents.id"),index=True); token_hash:Mapped[str]=mapped_column(String(64),unique=True,index=True); expires_at:Mapped[datetime]=mapped_column(DateTime,index=True); max_downloads:Mapped[int]=mapped_column(Integer,default=1); downloads:Mapped[int]=mapped_column(Integer,default=0); active:Mapped[bool]=mapped_column(Boolean,default=True); created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
+
+class Notification(Base):
+ __tablename__="notifications"; id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid); kind:Mapped[str]=mapped_column(String(50),index=True); title:Mapped[str]=mapped_column(String(300)); body:Mapped[str|None]=mapped_column(Text); document_id:Mapped[str|None]=mapped_column(ForeignKey("documents.id"),index=True); read:Mapped[bool]=mapped_column(Boolean,default=False,index=True); created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
