@@ -13,6 +13,8 @@ from .it import r as it_router
 from .assistant import r as assistant_router
 from .system_api import r as system_router
 from .overview import r as overview_router
+from .bulk_import import r as bulk_router
+from .it_history import r as it_history_router
 Base.metadata.create_all(engine)
 app=FastAPI(title="Hossein Hub",version="2.0.0")
 app.include_router(auth_router)
@@ -24,6 +26,8 @@ app.include_router(it_router)
 app.include_router(assistant_router)
 app.include_router(system_router)
 app.include_router(overview_router)
+app.include_router(bulk_router)
+app.include_router(it_history_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
