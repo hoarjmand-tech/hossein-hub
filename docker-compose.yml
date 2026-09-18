@@ -34,6 +34,7 @@ services:
       BACKUPS_ROOT: /backups
       COOKIE_SECURE: "false"
       CONNECTOR_SECRETS_ROOT: /run/connector-secrets
+      NETOPS_DISCOVERY_CIDRS: 192.168.1.0/24,192.168.22.0/24
     secrets: [postgres_password,hub_api_key,telegram_bot_token,telegram_admin_id]
     depends_on:
       postgres:
