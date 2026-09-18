@@ -44,6 +44,9 @@ def admin(u=Depends(current_user)):
 class ImportDiscovered(BaseModel):
  devices:list[dict]
 
+class ReadCommand(BaseModel):
+ command:str=Field(min_length=1,max_length=500)
+
 class Change(BaseModel):
  device_id:str=Field(min_length=1,max_length=120)
  commands:list[str]=Field(min_length=1,max_length=500)
@@ -121,3 +124,37 @@ def test_all(u=Depends(admin)):
    results.append({"id":d.get("id"),"name":d.get("name"),"host":d.get("host"),"ok":False,"error":str(e)[:500]})
  if changed:INV.write_text(json.dumps(devices,ensure_ascii=False,indent=2))
  return {"total":len(results),"ok":sum(1 for x in results if x["ok"]),"failed":sum(1 for x in results if not x["ok"]),"results":results}
+
+@r.get("/devices/{device_id}")
+def device_detail(device_id:str,db:Session=Depends(get_db),u=Depends(admin)):
+ d=next((z for z in inv() if str(z.get("id"))==device_id),None)
+ if not d:raise HTTPException(404,"Device not found")
+ recent=list(db.scalars(select(NetworkChangeJob).where(NetworkChangeJob.device_id==device_id).order_by(NetworkChangeJob.created_at.desc()).limit(20)))
+ return {"device":{k:d.get(k) for k in d.keys() if k not in ("password","username","password_file","username_file","enable_secret_file","key_file")},
+ "jobs":[{"id":x.id,"status":x.status,"requested_by":x.requested_by,"created_at":x.created_at,"finished_at":x.finished_at,"error":x.error} for x in recent]}
+
+@r.post("/devices/{device_id}/command",dependencies=[Depends(csrf_guard)])
+def read_command(device_id:str,x:ReadCommand,u=Depends(admin)):
+ d=next((z for z in inv() if str(z.get("id"))==device_id and z.get("enabled",True)),None)
+ if not d:raise HTTPException(404,"Device not found")
+ cmd=x.command.strip()
+ low=cmd.lower()
+ allowed=("show ","get ","diagnose ","display ","/system ","/interface print","/ip address print","/ip route print","/routing ","ping ","traceroute ")
+ if not any(low.startswith(p) for p in allowed):
+  raise HTTPException(400,"Only read-only operational commands are allowed here. Use Change Pipeline for configuration changes.")
+ try:
+  from netmiko import ConnectHandler
+  dtype=d.get("device_type") or "cisco_ios"
+  kw={"device_type":dtype,"host":d["host"],"port":int(d.get("port",22)),"username":_secret(d.get("username_file","")) or d.get("username",""),"password":_secret(d.get("password_file","")),"secret":_secret(d.get("enable_secret_file","")),"fast_cli":False,"conn_timeout":10,"auth_timeout":12,"banner_timeout":12}
+  c=ConnectHandler(**kw)
+  try:
+   if kw["secret"]:
+    try:c.enable()
+    except:pass
+   out=c.send_command(cmd,read_timeout=120)
+   return {"ok":True,"device":d.get("name") or device_id,"command":cmd,"output":out[:200000]}
+  finally:
+   try:c.disconnect()
+   except:pass
+ except Exception as e:
+  raise HTTPException(502,str(e)[:1000])
