@@ -8,9 +8,9 @@ echo "[4/10] Runtime";mkdir -p archive/{documents,previews,trash,import,exports}
 echo "[5/10] API secret";if [ ! -s secrets/hub_api_key ];then umask 077;openssl rand -hex 32 > secrets/hub_api_key;echo "Created secrets/hub_api_key";fi;chmod 600 secrets/hub_api_key secrets/postgres_password
 if [ ! -s secrets/backup_key ];then umask 077;openssl rand -base64 48 > secrets/backup_key;echo "Created encrypted-backup key";fi
 chmod 600 secrets/backup_key
-[ ! -e secrets/telegram_bot_token ] || sudo chmod 600 secrets/telegram_bot_token
+true # existing Telegram token ownership/permissions are preserved
 if [ ! -e secrets/telegram_admin_id ];then umask 077;touch secrets/telegram_admin_id;fi
-[ ! -e secrets/telegram_admin_id ] || sudo chmod 600 secrets/telegram_admin_id
+true # Telegram admin secret permissions are preserved
 echo "[6/10] Network";docker network inspect hossein-hub-backend >/dev/null 2>&1||docker network create hossein-hub-backend
 echo "[7/10] Validate";python3 -m compileall -q app/backend/app
 echo "[7/10] Build"
