@@ -1,0 +1,10 @@
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Audit Log</title><style>
+*{box-sizing:border-box}body{margin:0;font-family:Tahoma,Arial;background:#eef2f7;color:#0f172a}header{background:#0f172a;color:#fff;padding:18px}.w{max-width:1250px;margin:auto;padding:18px}.p{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px}input,button{font:inherit;padding:9px;border:1px solid #cbd5e1;border-radius:8px}button{background:#0f172a;color:#fff}table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #e2e8f0;text-align:right;font-size:13px}.row{display:flex;gap:8px;flex-wrap:wrap}</style></head><body>
+<header><a href="/" style="color:#fff">← اصلی</a>　<b>Audit Log</b></header><main class="w"><div class="p row"><input id="q" placeholder="فیلتر action/type/detail..." oninput="render()"><button onclick="load()">Refresh</button><a href="/api/reports/audit.csv">CSV</a></div><div class="p"><table><thead><tr><th>Time</th><th>Action</th><th>Type</th><th>Object</th><th>Detail</th></tr></thead><tbody id="rows"></tbody></table></div></main>
+<script>
+let data=[];
+async function load(){let r=await fetch("/api/archive/audit?limit=500");if(r.status===401){location="/archive";return}data=await r.json();render()}
+function esc(v){return String(v??"").replace(/[&<>]/g,"")}
+function render(){let s=(q.value||"").toLowerCase();let x=data.filter(z=>!s||JSON.stringify(z).toLowerCase().includes(s));rows.innerHTML=x.map(z=>"<tr><td>"+esc(z.at)+"</td><td>"+esc(z.action)+"</td><td>"+esc(z.type)+"</td><td>"+esc(z.object_id||"")+"</td><td>"+esc(z.detail||"")+"</td></tr>").join("")}
+load()
+</script></body></html>
