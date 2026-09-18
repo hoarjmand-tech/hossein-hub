@@ -3,7 +3,7 @@ from sqlalchemy import select,func
 from sqlalchemy.orm import Session
 from .core import get_db
 from .auth import current_user
-from .models import ManagedAsset,SystemAlert,Document,Reminder,Notification,ShareLink
+from .models import ManagedAsset,SystemAlert,Document,Reminder,Notification,ShareLink,NetworkChangeJob,DeviceConfigSnapshot,User
 r=APIRouter(prefix="/api/overview",dependencies=[Depends(current_user)])
 @r.get("")
 def overview(db:Session=Depends(get_db)):
@@ -14,5 +14,8 @@ def overview(db:Session=Depends(get_db)):
   "assets":db.scalar(select(func.count()).select_from(ManagedAsset)) or 0,
   "assets_down":db.scalar(select(func.count()).select_from(ManagedAsset).where(ManagedAsset.last_status=="down")) or 0,
   "alerts_open":db.scalar(select(func.count()).select_from(SystemAlert).where(SystemAlert.acknowledged==False)) or 0,
-  "active_shares":db.scalar(select(func.count()).select_from(ShareLink).where(ShareLink.active==True)) or 0
+  "active_shares":db.scalar(select(func.count()).select_from(ShareLink).where(ShareLink.active==True)) or 0,
+  "netops_failed":db.scalar(select(func.count()).select_from(NetworkChangeJob).where(NetworkChangeJob.status=="failed")) or 0,
+  "config_snapshots":db.scalar(select(func.count()).select_from(DeviceConfigSnapshot)) or 0,
+  "users":db.scalar(select(func.count()).select_from(User).where(User.active==True)) or 0
  }
