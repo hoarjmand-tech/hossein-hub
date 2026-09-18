@@ -28,3 +28,13 @@ def thumbnail(path:Path,mime:str|None,out:Path):
    im=Image.open(path);im.thumbnail((700,700));im.convert("RGB").save(out,"JPEG",quality=82)
   return out.exists()
  except Exception:return False
+
+def safe_name(s:str)->str:
+ import re
+ s=Path(s or "file").name
+ return re.sub(r'[^\w.()\- \u0600-\u06ff]+','_',s)[:180] or "file"
+def detected_mime(path:Path)->str:
+ try:
+  import magic
+  return magic.from_file(str(path),mime=True) or "application/octet-stream"
+ except Exception:return "application/octet-stream"
