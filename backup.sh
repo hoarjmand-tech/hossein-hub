@@ -12,5 +12,6 @@ SYSTEM_ITEMS=(config)
 tar --exclude='secrets/backup_key' -czf "$TMP/system.tar.gz" "${SYSTEM_ITEMS[@]}"
 for F in database.sql.gz archive.tar.gz system.tar.gz;do openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -in "$TMP/$F" -out "$DEST/$F.enc" -pass file:"$KEY";done
 sha256sum "$DEST/"*.enc > "$DEST/SHA256SUMS"
+(cd "$DEST" && sha256sum -c SHA256SUMS)
 find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +
 echo "ENCRYPTED BACKUP OK: $DEST"
