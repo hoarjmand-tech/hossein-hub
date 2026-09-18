@@ -14,6 +14,9 @@ def admin(u=Depends(current_user)):
  if not u.is_admin:raise HTTPException(403,"Admin required")
  return u
 
+class TaskState(BaseModel):
+ enabled:bool
+
 class TaskIn(BaseModel):
  name:str=Field(min_length=1,max_length=200)
  kind:str=Field(pattern="^(it_check_all|compliance_scan|daily_summary)$")
@@ -66,3 +69,19 @@ def compliance(limit:int=200,db:Session=Depends(get_db),u=Depends(admin)):
  rows=db.scalars(select(ComplianceResult).order_by(ComplianceResult.checked_at.desc()).limit(min(limit,1000)))
  return [{"id":x.id,"device_id":x.device_id,"device_name":x.device_name,"policy_name":x.policy_name,
  "status":x.status,"detail":x.detail,"checked_at":x.checked_at} for x in rows]
+
+@r.patch("/tasks/{tid}/state",dependencies=[Depends(csrf_guard)])
+def task_state(tid:str,x:TaskState,db:Session=Depends(get_db),u=Depends(admin)):
+ z=db.get(AutomationTask,tid)
+ if not z:raise HTTPException(404)
+ z.enabled=x.enabled
+ if x.enabled:z.next_run=datetime.utcnow()
+ db.add(Audit(action="automation.state",object_type="automation",object_id=z.id,detail=f"enabled={x.enabled} by {u.username}"))
+ db.commit();return {"ok":True}
+
+@r.delete("/tasks/{tid}",dependencies=[Depends(csrf_guard)])
+def delete_task(tid:str,db:Session=Depends(get_db),u=Depends(admin)):
+ z=db.get(AutomationTask,tid)
+ if not z:raise HTTPException(404)
+ db.add(Audit(action="automation.delete",object_type="automation",object_id=z.id,detail=f"{z.name} by {u.username}"))
+ db.delete(z);db.commit();return {"ok":True}
