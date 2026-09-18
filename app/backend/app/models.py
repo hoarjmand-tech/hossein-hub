@@ -45,3 +45,23 @@ class SystemAlert(Base):
 
 class ConnectorSample(Base):
  __tablename__="connector_samples"; id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid); connector:Mapped[str]=mapped_column(String(80),index=True); status:Mapped[str]=mapped_column(String(30),index=True); summary_json:Mapped[str|None]=mapped_column(Text); sampled_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
+
+class NetworkChangeJob(Base):
+ __tablename__="network_change_jobs"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ device_id:Mapped[str]=mapped_column(String(120),index=True)
+ device_name:Mapped[str]=mapped_column(String(200),index=True)
+ requested_by:Mapped[str]=mapped_column(String(100),index=True)
+ status:Mapped[str]=mapped_column(String(30),default="queued",index=True)
+ change_commands:Mapped[str]=mapped_column(Text)
+ precheck_commands:Mapped[str|None]=mapped_column(Text)
+ postcheck_commands:Mapped[str|None]=mapped_column(Text)
+ rollback_commands:Mapped[str|None]=mapped_column(Text)
+ backup_text:Mapped[str|None]=mapped_column(Text)
+ precheck_output:Mapped[str|None]=mapped_column(Text)
+ change_output:Mapped[str|None]=mapped_column(Text)
+ postcheck_output:Mapped[str|None]=mapped_column(Text)
+ error:Mapped[str|None]=mapped_column(Text)
+ created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
+ started_at:Mapped[datetime|None]=mapped_column(DateTime)
+ finished_at:Mapped[datetime|None]=mapped_column(DateTime)
