@@ -2,9 +2,9 @@
 *{box-sizing:border-box}body{margin:0;font-family:Tahoma,Arial;background:#eef2f7;color:#0f172a}header{background:#0f172a;color:#fff;padding:18px}.w{max-width:1200px;margin:auto;padding:18px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.c{background:#fff;padding:18px;border-radius:14px;border:1px solid #e2e8f0}.ok{color:#166534}.bad{color:#991b1b}.muted{color:#64748b}.row{display:flex;gap:8px;flex-wrap:wrap}.btn{border:0;border-radius:8px;background:#0f172a;color:#fff;padding:9px 12px;cursor:pointer}pre{white-space:pre-wrap;max-height:360px;overflow:auto;background:#f8fafc;padding:10px;border-radius:8px}.tbl{width:100%;border-collapse:collapse}.tbl td,.tbl th{padding:8px;border-bottom:1px solid #e2e8f0;text-align:right}@media(max-width:850px){.grid{grid-template-columns:1fr}}</style></head><body>
 <header><a href="/" style="color:white">← اصلی</a>　<b>Infrastructure Connectors</b></header><main class="w">
 <div class="grid">
-<section class="c"><h2>FortiGate</h2><div id="fs">—</div><div class="row"><button class="btn" onclick="loadFG('interfaces')">Interfaces</button><button class="btn" onclick="loadFG('sessions')">Sessions</button></div><div id="fd"></div></section>
-<section class="c"><h2>ESXi / vCenter</h2><div id="es">—</div><div id="ed"></div></section>
-<section class="c"><h2>Veeam</h2><div id="vs">—</div><div class="row"><button class="btn" onclick="loadV('jobs')">Jobs</button><button class="btn" onclick="loadV('sessions')">Sessions</button></div><div id="vd"></div></section>
+<section class="c"><h2><a href="/fortigate" style="color:inherit">FortiGate</a></h2><div id="fs">—</div><div class="row"><button class="btn" onclick="loadFG('interfaces')">Interfaces</button><button class="btn" onclick="loadFG('sessions')">Sessions</button></div><div id="fd"></div></section>
+<section class="c"><h2><a href="/esxi" style="color:inherit">ESXi / vCenter</a></h2><div id="es">—</div><div id="ed"></div></section>
+<section class="c"><h2><a href="/veeam" style="color:inherit">Veeam</a></h2><div id="vs">—</div><div class="row"><button class="btn" onclick="loadV('jobs')">Jobs</button><button class="btn" onclick="loadV('sessions')">Sessions</button></div><div id="vd"></div></section>
 </div>
 <div class="c" style="margin-top:14px"><b>Security</b><p class="muted">این ماژول Read-Only طراحی شده است. Credentialها فقط از Secretهای محلی سرور خوانده می‌شوند و داخل GitHub ذخیره نمی‌شوند.</p></div>
 </main><script>
