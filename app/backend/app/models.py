@@ -99,3 +99,43 @@ class ComplianceResult(Base):
  status:Mapped[str]=mapped_column(String(30),index=True)
  detail:Mapped[str|None]=mapped_column(Text)
  checked_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
+
+class NetworkConfigTemplate(Base):
+ __tablename__="network_config_templates"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ name:Mapped[str]=mapped_column(String(200),index=True)
+ vendor:Mapped[str]=mapped_column(String(80),default="any",index=True)
+ role:Mapped[str]=mapped_column(String(80),default="any",index=True)
+ description:Mapped[str|None]=mapped_column(Text)
+ precheck:Mapped[str|None]=mapped_column(Text)
+ change_commands:Mapped[str]=mapped_column(Text)
+ postcheck:Mapped[str|None]=mapped_column(Text)
+ rollback:Mapped[str|None]=mapped_column(Text)
+ variables_json:Mapped[str|None]=mapped_column(Text)
+ enabled:Mapped[bool]=mapped_column(Boolean,default=True,index=True)
+ created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
+
+class NetworkNeighborSnapshot(Base):
+ __tablename__="network_neighbor_snapshots"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ local_device_id:Mapped[str]=mapped_column(String(120),index=True)
+ local_device_name:Mapped[str]=mapped_column(String(200),index=True)
+ local_interface:Mapped[str|None]=mapped_column(String(120))
+ neighbor_name:Mapped[str|None]=mapped_column(String(200),index=True)
+ neighbor_ip:Mapped[str|None]=mapped_column(String(120),index=True)
+ neighbor_interface:Mapped[str|None]=mapped_column(String(120))
+ platform:Mapped[str|None]=mapped_column(String(200))
+ protocol:Mapped[str]=mapped_column(String(30),default="lldp")
+ raw_text:Mapped[str|None]=mapped_column(Text)
+ collected_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
+
+class NetworkChangePolicy(Base):
+ __tablename__="network_change_policies"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ name:Mapped[str]=mapped_column(String(200),index=True)
+ enabled:Mapped[bool]=mapped_column(Boolean,default=True,index=True)
+ require_precheck:Mapped[bool]=mapped_column(Boolean,default=False)
+ require_postcheck:Mapped[bool]=mapped_column(Boolean,default=False)
+ require_rollback:Mapped[bool]=mapped_column(Boolean,default=False)
+ blocked_patterns_json:Mapped[str|None]=mapped_column(Text)
+ created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
