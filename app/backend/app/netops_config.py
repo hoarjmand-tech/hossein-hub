@@ -80,3 +80,28 @@ def diff(device_id:str,db:Session=Depends(get_db),u=Depends(admin)):
  new,old=rows[0],rows[1]
  text="".join(difflib.unified_diff(old.config_text.splitlines(True),new.config_text.splitlines(True),fromfile=str(old.created_at),tofile=str(new.created_at)))
  return {"available":True,"old_id":old.id,"new_id":new.id,"diff":text[:200000]}
+
+@r.post("/backup-all",dependencies=[Depends(csrf_guard)])
+def backup_all(db:Session=Depends(get_db),u=Depends(admin)):
+ results=[]
+ for d in inv():
+  if not d.get("enabled",True):continue
+  if not d.get("username_file") or not d.get("password_file"):
+   results.append({"device":d.get("name") or d.get("host"),"ok":False,"error":"No credentials"});continue
+  c=None
+  try:
+   c=connect(d);cmd=backup_command(d.get("device_type") or "");text=c.send_command(cmd,read_timeout=180)
+   sha=hashlib.sha256(text.encode()).hexdigest()
+   last=db.scalar(select(DeviceConfigSnapshot).where(DeviceConfigSnapshot.device_id==str(d.get("id"))).order_by(DeviceConfigSnapshot.created_at.desc()))
+   changed=not last or last.sha256!=sha
+   if changed:
+    s=DeviceConfigSnapshot(device_id=str(d.get("id")),device_name=d.get("name") or d.get("host") or str(d.get("id")),config_text=text,sha256=sha,source="manual-all")
+    db.add(s);db.flush();db.add(Audit(action="netops.backup.manual_all",object_type="network_device",object_id=s.id,detail=s.device_name));db.commit()
+   results.append({"device":d.get("name") or d.get("host"),"ok":True,"changed":changed,"bytes":len(text.encode())})
+  except Exception as e:
+   db.rollback();results.append({"device":d.get("name") or d.get("host"),"ok":False,"error":str(e)[:300]})
+  finally:
+   try:
+    if c:c.disconnect()
+   except:pass
+ return {"total":len(results),"ok":sum(1 for x in results if x.get("ok")),"failed":sum(1 for x in results if not x.get("ok")),"changed":sum(1 for x in results if x.get("changed")),"results":results}
