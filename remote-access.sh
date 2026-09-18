@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 cd /opt/hossein-hub
 mkdir -p data/tailscale
-docker compose -f docker-compose.yml up -d tailscale
+docker compose -f docker-compose.yml up -d --force-recreate tailscale
 echo "Waiting for Tailscale..."
 STATE=$(docker exec hossein-hub-tailscale tailscale status --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("BackendState",""))' 2>/dev/null || true)
 if [ "$STATE" != "Running" ]; then
