@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .auth import current_user,csrf_guard
 from .core import get_db
-from .models import NetworkChangeJob,Audit
+from .models import NetworkChangeJob,Audit,NetworkChangePolicy
 r=APIRouter(prefix="/api/netops",dependencies=[Depends(current_user)])
 ROOT=Path(os.getenv("NETOPS_SECRETS_ROOT","/run/netops-secrets"))
 INV=ROOT/"devices.json"
@@ -37,12 +37,38 @@ def _netmiko_test(d):
   try:c.disconnect()
   except:pass
 
+def _change_policy_check(db,x):
+ policies=list(db.scalars(select(NetworkChangePolicy).where(NetworkChangePolicy.enabled==True)))
+ commands="\n".join(x.commands).lower()
+ for p in policies:
+  if p.require_precheck and not x.precheck:raise HTTPException(400,f"Policy {p.name}: pre-check required")
+  if p.require_postcheck and not x.postcheck:raise HTTPException(400,f"Policy {p.name}: post-check required")
+  if p.require_rollback and not x.rollback:raise HTTPException(400,f"Policy {p.name}: rollback required")
+  try:blocked=json.loads(p.blocked_patterns_json or "[]")
+  except:blocked=[]
+  for pat in blocked:
+   if str(pat).lower() in commands:raise HTTPException(400,f"Policy {p.name}: blocked command pattern: {pat}")
+
+def _save_inv(devices):
+ ROOT.mkdir(parents=True,exist_ok=True)
+ INV.write_text(json.dumps(devices,ensure_ascii=False,indent=2))
+
 def admin(u=Depends(current_user)):
  if not u.is_admin:raise HTTPException(403,"Admin required")
  return u
 
 class ImportDiscovered(BaseModel):
  devices:list[dict]
+
+class DevicePatch(BaseModel):
+ name:str|None=None
+ host:str|None=None
+ port:int|None=None
+ device_type:str|None=None
+ site:str|None=None
+ role:str|None=None
+ enabled:bool|None=None
+ save_after:bool|None=None
 
 class ReadCommand(BaseModel):
  command:str=Field(min_length=1,max_length=500)
@@ -73,6 +99,7 @@ def job(jid:str,db:Session=Depends(get_db),u=Depends(admin)):
 def create(x:Change,db:Session=Depends(get_db),u=Depends(admin)):
  d=next((z for z in inv() if str(z.get("id"))==x.device_id and z.get("enabled",True)),None)
  if not d:raise HTTPException(404,"Device not found or disabled")
+ _change_policy_check(db,x)
  j=NetworkChangeJob(device_id=x.device_id,device_name=d.get("name") or x.device_id,requested_by=u.username,status="queued",
   change_commands="\n".join(x.commands),precheck_commands="\n".join(x.precheck),postcheck_commands="\n".join(x.postcheck),rollback_commands="\n".join(x.rollback))
  db.add(j);db.flush();db.add(Audit(action="netops.change.queue",object_type="network_device",object_id=j.id,detail=f"{j.device_name} by {u.username}"));db.commit()
@@ -158,3 +185,14 @@ def read_command(device_id:str,x:ReadCommand,u=Depends(admin)):
    except:pass
  except Exception as e:
   raise HTTPException(502,str(e)[:1000])
+
+@r.patch("/devices/{device_id}",dependencies=[Depends(csrf_guard)])
+def patch_device(device_id:str,x:DevicePatch,db:Session=Depends(get_db),u=Depends(admin)):
+ devices=inv();d=next((z for z in devices if str(z.get("id"))==device_id),None)
+ if not d:raise HTTPException(404,"Device not found")
+ for k,v in x.model_dump(exclude_unset=True).items():
+  if k=="host" and v is not None and not str(v).strip():raise HTTPException(400,"Host cannot be blank")
+  d[k]=v
+ _save_inv(devices)
+ db.add(Audit(action="netops.device.update",object_type="network_device",object_id=device_id,detail=f"{d.get('name') or device_id} by {u.username}"));db.commit()
+ return {"ok":True,"device":{k:d.get(k) for k in ("id","name","host","port","device_type","site","role","enabled","save_after")}}
