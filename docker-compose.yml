@@ -50,8 +50,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      HUB_API_KEY_FILE: /run/secrets/hub_api_key
       ARCHIVE_ROOT: /archive
-    secrets: [postgres_password]
+    secrets: [postgres_password,hub_api_key]
     depends_on:
       postgres:
         condition: service_healthy
