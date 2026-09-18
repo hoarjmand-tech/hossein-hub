@@ -104,6 +104,30 @@ services:
         condition: service_healthy
     network_mode: host
 
+  netops-backup-worker:
+    build: ./app/backend
+    container_name: hossein-hub-netops-backup
+    restart: unless-stopped
+    command: ["python","-m","app.netops_backup_worker"]
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
+      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
+      NETOPS_SECRETS_ROOT: /run/netops-secrets
+      NETOPS_BACKUP_INTERVAL: "86400"
+    secrets: [postgres_password,telegram_bot_token,telegram_admin_id]
+    depends_on:
+      archive-api:
+        condition: service_healthy
+    volumes:
+      - ./secrets/netops:/run/netops-secrets:ro
+    network_mode: host
+
   netops-worker:
     build: ./app/backend
     container_name: hossein-hub-netops
