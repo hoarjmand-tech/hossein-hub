@@ -1,4 +1,4 @@
-import hashlib,secrets,time
+import hashlib,secrets,time,os
 from collections import defaultdict,deque
 from datetime import datetime,timedelta
 from fastapi import APIRouter,Depends,HTTPException,Request,Response
@@ -35,7 +35,7 @@ def csrf_guard(request:Request,db:Session=Depends(get_db)):
 @r.get("/status")
 def status(db:Session=Depends(get_db)):return {"setup_required":(db.scalar(select(func.count()).select_from(User)) or 0)==0}
 def issue(u,response,db,action):
- raw=secrets.token_urlsafe(48);c=secrets.token_urlsafe(32);s=SessionToken(user_id=u.id,token_hash=h(raw),csrf_hash=h(c),expires_at=datetime.utcnow()+timedelta(days=TTL_DAYS));db.add(s);u.last_login=datetime.utcnow();db.add(Audit(action=action,object_type="auth",object_id=u.id));db.commit();response.set_cookie(COOKIE,raw,httponly=True,samesite="strict",secure=False,max_age=TTL_DAYS*86400,path="/");return {"ok":True,"username":u.username,"csrf":c}
+ raw=secrets.token_urlsafe(48);c=secrets.token_urlsafe(32);s=SessionToken(user_id=u.id,token_hash=h(raw),csrf_hash=h(c),expires_at=datetime.utcnow()+timedelta(days=TTL_DAYS));db.add(s);u.last_login=datetime.utcnow();db.add(Audit(action=action,object_type="auth",object_id=u.id));db.commit();response.set_cookie(COOKIE,raw,httponly=True,samesite="strict",secure=os.getenv("COOKIE_SECURE","true").lower()=="true",max_age=TTL_DAYS*86400,path="/");return {"ok":True,"username":u.username,"csrf":c}
 @r.post("/setup")
 def setup(x:Credentials,response:Response,db:Session=Depends(get_db)):
  if (db.scalar(select(func.count()).select_from(User)) or 0)>0:raise HTTPException(409)
