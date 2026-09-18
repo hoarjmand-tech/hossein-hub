@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime
 from sqlalchemy import select
 from .core import SessionLocal
-from .models import NetworkChangeJob,Audit
+from .models import NetworkChangeJob,Audit,NetworkChangeValidation
 
 ROOT=Path(os.getenv("NETOPS_SECRETS_ROOT","/run/netops-secrets"))
 INV=ROOT/"devices.json"
@@ -72,6 +72,25 @@ def run_change(c,d,cmds):
   return out
  return c.send_config_set(cmds,read_timeout=180)
 
+def validate_output(db,j):
+ v=db.scalar(select(NetworkChangeValidation).where(NetworkChangeValidation.job_id==j.id))
+ if not v:return
+ try:must=json.loads(v.must_include_json or "[]")
+ except:must=[]
+ try:mustnot=json.loads(v.must_not_include_json or "[]")
+ except:mustnot=[]
+ text=(j.postcheck_output or "")+"\n"+(j.change_output or "")
+ issues=[]
+ for x in must:
+  if str(x) not in text:issues.append("missing: "+str(x))
+ for x in mustnot:
+  if str(x) in text:issues.append("forbidden output present: "+str(x))
+ v.checked_at=datetime.utcnow()
+ if issues:
+  v.status="failed";v.detail="; ".join(issues)
+  raise RuntimeError("Post-change validation failed: "+v.detail)
+ v.status="passed";v.detail="Validation passed"
+
 def persist_change(c,d):
  t=d.get("device_type","")
  if d.get("save_after",True) is False:return ""
@@ -100,6 +119,7 @@ while True:
     j.precheck_output=run_show(conn,lines(j.precheck_commands))
     j.change_output=run_change(conn,d,lines(j.change_commands))
     j.postcheck_output=run_show(conn,lines(j.postcheck_commands))
+    validate_output(db,j)
     saved=persist_change(conn,d)
     if saved:j.change_output=(j.change_output or "")+"\n\n--- SAVE ---\n"+saved
     j.status="success";j.finished_at=datetime.utcnow()
