@@ -1,23 +1,22 @@
-# Hossein Hub
+# Hossein Hub 1.0
+Private digital archive and personal operations platform.
 
-Private-first personal document archive. Source code only; never commit documents, database files, secrets, exports, OCR data, or backups.
+## Archive 1.0
+Authentication with Argon2 and server sessions; CSRF protection; login throttling; PDF/image upload with server-side MIME validation; SHA-256 duplicate detection; asynchronous Persian/English OCR; thumbnails; metadata; tags; people; cases; versions; original/translation/signed kinds; document relations; full-text/OCR search; favorites; expiry tracking; reminders; notification center; recycle bin/restore/permanent purge API; audit trail; ZIP export; expiring/revocable share links; responsive PWA.
 
-## Archive module
-FastAPI + PostgreSQL document registry with SHA-256 duplicate detection, metadata, cases, tags, expiry tracking, soft-delete/trash/restore, audit events, full-text metadata search, safe local storage and download endpoints.
+## Operations
+PostgreSQL, FastAPI, dedicated OCR worker, Nginx security proxy, Tailscale private HTTPS, daily verified database/archive backups, restore script, health-check script and Docker health monitoring.
 
 ## Deploy
-Copy .env.example to .env and set a strong API key and DB password. Then:
-```bash
-docker compose up -d --build
-curl http://127.0.0.1:8080/health
-```
-API docs: http://127.0.0.1:8080/docs
+`cd /opt/hossein-hub && bash deploy.sh && sudo bash install-maintenance.sh`
 
+## Remote HTTPS
+`bash remote-access.sh`
 
-## Remote access
-Sensitive administration is designed for Tailscale rather than direct Internet exposure.
-After normal deployment, enroll the host once with `bash remote-access.sh`.
-The LAN application remains available on `192.168.1.35:8080`. Do not port-forward SSH or the archive API directly from the Internet.
+## Verify
+`bash healthcheck.sh`
 
-## Backups
-Run `bash backup.sh` to create a timestamped PostgreSQL dump, archive snapshot, and SHA-256 manifest under `backups/`.
+## Restore
+`sudo bash restore.sh /opt/hossein-hub/backups/<timestamp>`
+
+Secrets and user documents must never be committed to Git.
