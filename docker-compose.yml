@@ -33,6 +33,7 @@ services:
       ARCHIVE_ROOT: /archive
       BACKUPS_ROOT: /backups
       COOKIE_SECURE: "false"
+      CONNECTOR_SECRETS_ROOT: /run/connector-secrets
     secrets: [postgres_password,hub_api_key,telegram_bot_token,telegram_admin_id]
     depends_on:
       postgres:
@@ -40,6 +41,7 @@ services:
     volumes:
       - ./archive:/archive
       - ./backups:/backups:ro
+      - ./secrets/connectors:/run/connector-secrets:ro
     expose: ["8080"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
