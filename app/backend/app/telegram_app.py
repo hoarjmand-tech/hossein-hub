@@ -13,6 +13,7 @@ def secret(p):
  try:return Path(p).read_text().strip()
  except:return ""
 TOKEN=secret(os.getenv("TELEGRAM_BOT_TOKEN_FILE","/run/secrets/telegram_bot_token"))
+ADMIN_ID=secret(os.getenv("TELEGRAM_ADMIN_ID_FILE","/run/secrets/telegram_admin_id"))
 class Init(BaseModel):init_data:str
 def validate(raw):
  d=dict(parse_qsl(raw,keep_blank_values=True));got=d.pop("hash",None)
@@ -25,6 +26,7 @@ def validate(raw):
   if abs(time.time()-int(d.get("auth_date","0")))>900:raise HTTPException(401,"Telegram session expired")
   user=json.loads(d.get("user","{}"))
  except (ValueError,json.JSONDecodeError):raise HTTPException(401)
+ if not ADMIN_ID or str(user.get("id",""))!=ADMIN_ID:raise HTTPException(403,"Telegram account is not authorized")
  return user
 @r.post("/login")
 def login(x:Init):
