@@ -42,8 +42,9 @@ def show_backup(c,d):
  cmds=d.get("backup_commands")
  if not cmds:
   if "fortinet" in t:cmds=["show full-configuration"]
-  elif "mikrotik" in t:cmds=["/export terse"]
-  elif "cisco" in t or "arista" in t or "juniper" in t:cmds=["show running-config"]
+  elif "mikrotik" in t:cmds=["/export terse hide-sensitive"]
+  elif "juniper" in t:cmds=["show configuration | display set"]
+  elif "cisco" in t or "arista" in t:cmds=["show running-config"]
   else:cmds=["show configuration"]
  out=[]
  for cmd in cmds:
@@ -64,7 +65,20 @@ def run_change(c,d,cmds):
   return c.send_config_set(cmds,exit_config_mode=False,read_timeout=180)
  if "mikrotik" in t:
   return "\n".join(c.send_command(x,read_timeout=90) for x in cmds)
+ if "juniper" in t:
+  out=c.send_config_set(cmds,read_timeout=180)
+  try: out += "\n"+str(c.commit())
+  except Exception as e: raise RuntimeError("Juniper commit failed: "+str(e))
+  return out
  return c.send_config_set(cmds,read_timeout=180)
+
+def persist_change(c,d):
+ t=d.get("device_type","")
+ if d.get("save_after",True) is False:return ""
+ if "cisco_ios" in t or "cisco_nxos" in t or "arista" in t:
+  try:return str(c.save_config())
+  except Exception as e:return "save warning: "+str(e)
+ return ""
 
 while True:
  try:
@@ -86,6 +100,8 @@ while True:
     j.precheck_output=run_show(conn,lines(j.precheck_commands))
     j.change_output=run_change(conn,d,lines(j.change_commands))
     j.postcheck_output=run_show(conn,lines(j.postcheck_commands))
+    saved=persist_change(conn,d)
+    if saved:j.change_output=(j.change_output or "")+"\n\n--- SAVE ---\n"+saved
     j.status="success";j.finished_at=datetime.utcnow()
     db.add(Audit(action="netops.change.success",object_type="network_device",object_id=j.id,detail=j.device_name))
    except Exception as e:
