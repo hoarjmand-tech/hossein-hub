@@ -40,6 +40,12 @@ WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
 def home(): return FileResponse(WEB/"home.html",headers=NO_CACHE)
+@app.get("/fortigate",include_in_schema=False)
+def fortigate_home(): return FileResponse(WEB/"fortigate.html",headers=NO_CACHE)
+@app.get("/esxi",include_in_schema=False)
+def esxi_home(): return FileResponse(WEB/"esxi.html",headers=NO_CACHE)
+@app.get("/veeam",include_in_schema=False)
+def veeam_home(): return FileResponse(WEB/"veeam.html",headers=NO_CACHE)
 @app.get("/connectors",include_in_schema=False)
 def connectors_home(): return FileResponse(WEB/"connectors.html",headers=NO_CACHE)
 @app.get("/ops",include_in_schema=False)
