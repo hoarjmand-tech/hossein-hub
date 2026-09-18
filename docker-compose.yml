@@ -26,8 +26,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       HUB_API_KEY_FILE: /run/secrets/hub_api_key
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
       ARCHIVE_ROOT: /archive
-    secrets: [postgres_password,hub_api_key]
+    secrets: [postgres_password,hub_api_key,telegram_bot_token]
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,6 +93,8 @@ secrets:
     file: ./secrets/postgres_password
   hub_api_key:
     file: ./secrets/hub_api_key
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token
 networks:
   hub-backend:
     external: true
