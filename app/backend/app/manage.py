@@ -48,3 +48,9 @@ def mark_read(nid:str,db:Session=Depends(get_db)):
  x=db.get(Notification,nid)
  if not x:raise HTTPException(404)
  x.read=True;db.commit();return {"ok":True}
+
+@r.post("/notifications/read-all")
+def notifications_read_all(db:Session=Depends(get_db)):
+ for x in db.scalars(select(Notification).where(Notification.read==False)):
+  x.read=True
+ db.commit();return {"ok":True}
