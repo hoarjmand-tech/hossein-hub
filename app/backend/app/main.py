@@ -4,18 +4,21 @@ from fastapi.responses import FileResponse
 from sqlalchemy import text
 from .core import engine
 from .models import Base
-from .archive import r
+from .archive import r as archive_router
+from .auth import r as auth_router
 Base.metadata.create_all(engine)
-app=FastAPI(title="Hossein Hub",version="0.4.0")
-app.include_router(r)
+app=FastAPI(title="Hossein Hub",version="0.5.1")
+app.include_router(auth_router)
+app.include_router(archive_router)
 WEB=Path(__file__).parent/"web"
+NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
-def home(): return FileResponse(WEB/"index.html")
+def home(): return FileResponse(WEB/"index.html",headers=NO_CACHE)
 @app.get("/manifest.json",include_in_schema=False)
-def manifest(): return FileResponse(WEB/"manifest.json",media_type="application/manifest+json")
+def manifest(): return FileResponse(WEB/"manifest.json",media_type="application/manifest+json",headers=NO_CACHE)
 @app.get("/sw.js",include_in_schema=False)
-def sw(): return FileResponse(WEB/"sw.js",media_type="application/javascript")
+def sw(): return FileResponse(WEB/"sw.js",media_type="application/javascript",headers=NO_CACHE)
 @app.get("/health")
 def health():
-    with engine.connect() as c:c.execute(text("select 1"))
-    return {"status":"ok","database":"ok","module":"archive","version":"0.4.0"}
+ with engine.connect() as c:c.execute(text("select 1"))
+ return {"status":"ok","database":"ok","module":"archive","version":"0.5.1"}
