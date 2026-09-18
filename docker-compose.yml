@@ -29,12 +29,15 @@ services:
       TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
       TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
       ARCHIVE_ROOT: /archive
+      BACKUPS_ROOT: /backups
+      COOKIE_SECURE: "false"
     secrets: [postgres_password,hub_api_key,telegram_bot_token,telegram_admin_id]
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./archive:/archive
+      - ./backups:/backups:ro
     expose: ["8080"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
