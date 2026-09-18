@@ -1,0 +1,19 @@
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Automation Center</title><style>
+*{box-sizing:border-box}body{margin:0;font-family:Tahoma,Arial;background:#eef2f7;color:#0f172a}header{background:#0f172a;color:#fff;padding:18px}.w{max-width:1200px;margin:auto;padding:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.p{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px}input,select,textarea,button{width:100%;font:inherit;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin:5px 0}textarea{min-height:160px;direction:ltr;text-align:left;font-family:monospace}button{background:#0f172a;color:#fff;cursor:pointer}.ok{color:#166534}.bad{color:#991b1b}.muted{color:#64748b}table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #e2e8f0;text-align:right;font-size:13px}@media(max-width:850px){.grid{grid-template-columns:1fr}}</style></head><body>
+<header><a href="/" style="color:#fff">← اصلی</a>　<b>Automation & Compliance Center</b></header>
+<main class="w">
+<div class="grid">
+<section class="p"><h2>Automation Tasks</h2><table><thead><tr><th>نام</th><th>نوع</th><th>Interval</th><th>Status</th><th>Action</th></tr></thead><tbody id="tasks"></tbody></table></section>
+<section class="p"><h2>Task جدید</h2><input id="name" placeholder="نام Task"><select id="kind"><option value="it_check_all">IT Health Check</option><option value="compliance_scan">NetOps Compliance Scan</option><option value="daily_summary">Daily Telegram Summary</option></select><input id="mins" type="number" min="5" value="60" placeholder="Interval minutes"><textarea id="cfg" placeholder='{"policies":[{"name":"Policy","forbid":["ip http server"],"require_any":["ssh","https"]}]}'></textarea><button onclick="addTask()">ایجاد Task</button><div id="msg"></div></section>
+</div>
+<section class="p"><h2>Compliance Results</h2><button onclick="loadCompliance()">Refresh Compliance</button><table><thead><tr><th>Device</th><th>Policy</th><th>Status</th><th>Detail</th><th>Time</th></tr></thead><tbody id="comp"></tbody></table></section>
+</main>
+<script>
+let CSRF="";
+async function api(u,o={}){if(o.method&&o.method!=="GET")o.headers={...(o.headers||{}),"Content-Type":"application/json","X-CSRF-Token":CSRF};let r=await fetch(u,o);if(r.status===401){location="/archive";throw 0}if(!r.ok)throw Error(await r.text());return r.json()}
+async function loadTasks(){let x=await api("/api/automation/tasks");tasks.innerHTML=x.map(z=>"<tr><td>"+z.name+"</td><td>"+z.kind+"</td><td>"+z.interval_minutes+"m</td><td class='"+(z.last_status==="failed"?"bad":"ok")+"'>"+z.last_status+"</td><td><button onclick=\"runNow('"+z.id+"')\">Run now</button></td></tr>").join("")}
+async function runNow(id){await api("/api/automation/tasks/"+id+"/run-now",{method:"POST"});msg.textContent="برای اجرا Queue شد.";setTimeout(loadTasks,1500)}
+async function addTask(){let config={};try{config=cfg.value.trim()?JSON.parse(cfg.value):{}}catch(e){msg.textContent="JSON تنظیمات نامعتبر است";return}await api("/api/automation/tasks",{method:"POST",body:JSON.stringify({name:name.value,kind:kind.value,interval_minutes:Number(mins.value),enabled:true,config})});name.value="";cfg.value="";loadTasks()}
+async function loadCompliance(){let x=await api("/api/automation/compliance");comp.innerHTML=x.map(z=>"<tr><td>"+z.device_name+"</td><td>"+z.policy_name+"</td><td class='"+(z.status==="pass"?"ok":"bad")+"'>"+z.status+"</td><td>"+(z.detail||"")+"</td><td>"+z.checked_at+"</td></tr>").join("")}
+(async()=>{let m=await api("/api/auth/me");CSRF=m.csrf;if(!m.admin){document.body.innerHTML="<main class='w'><div class='p bad'>Admin access required.</div></main>";return}loadTasks();loadCompliance()})()
+</script></body></html>
