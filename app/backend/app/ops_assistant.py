@@ -5,15 +5,15 @@ from sqlalchemy.orm import Session
 from .auth import current_user,csrf_guard
 from .core import get_db
 from .models import ManagedAsset,SystemAlert,Document
-from .connectors import fortigate_status,esxi_status,veeam_status
+from .connectors import fortigate_summary,vmware_inventory,veeam_summary
 r=APIRouter(prefix="/api/ops-assistant",dependencies=[Depends(current_user),Depends(csrf_guard)])
 class Ask(BaseModel):query:str=Field(min_length=2,max_length=500)
 @r.post("/ask")
 def ask(x:Ask,db:Session=Depends(get_db)):
  q=x.query.strip().lower()
- if any(k in q for k in ("fortigate","forti","فورتی")):return {"type":"connector","connector":"fortigate","result":fortigate_status()}
- if any(k in q for k in ("esxi","vmware","وی ام","ای اس ایکس")):return {"type":"connector","connector":"esxi","result":esxi_status()}
- if any(k in q for k in ("veeam","backup","بکاپ","بک آپ")):return {"type":"connector","connector":"veeam","result":veeam_status()}
+ if any(k in q for k in ("fortigate","forti","فورتی")):return {"type":"connector","connector":"fortigate","result":fortigate_summary()}
+ if any(k in q for k in ("esxi","vmware","وی ام","ای اس ایکس")):return {"type":"connector","connector":"esxi","result":vmware_inventory()}
+ if any(k in q for k in ("veeam","backup","بکاپ","بک آپ")):return {"type":"connector","connector":"veeam","result":veeam_summary()}
  if any(k in q for k in ("down","قطع","خاموش","دردسترس")):
   a=list(db.scalars(select(ManagedAsset).where(ManagedAsset.last_status=="down")))
   return {"type":"assets","items":[{"name":z.name,"address":z.address,"port":z.port,"status":z.last_status} for z in a]}
