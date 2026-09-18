@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 cd /opt/hossein-hub
 mkdir -p data/tailscale
-docker compose up -d tailscale
+docker compose -f docker-compose.yml up -d tailscale
 echo
 echo "Tailscale status:"
 docker exec hossein-hub-tailscale tailscale status || true
