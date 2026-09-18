@@ -65,6 +65,8 @@ docker compose -f docker-compose.yml build
 
 echo "[10/12] Start"
 docker compose -f docker-compose.yml up -d --remove-orphans
+# Recreate proxy after backend so it never retains an old container address
+docker compose -f docker-compose.yml up -d --force-recreate nginx
 
 echo "[11/12] Wait for health"
 for i in {1..60}; do
@@ -81,6 +83,14 @@ for i in {1..60}; do
   fi
   sleep 2
 done
+
+A=$(docker inspect -f '{{.State.Status}}' hossein-hub-archive 2>/dev/null || true)
+H=$(docker inspect -f '{{.State.Health.Status}}' hossein-hub-archive 2>/dev/null || true)
+if [ "$A" != "running" ] || [ "$H" != "healthy" ]; then
+  echo "ARCHIVE API FAILED"
+  docker compose -f docker-compose.yml logs --tail=200 archive-api nginx
+  exit 30
+fi
 
 echo "[12/12] Final status"
 if ! find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d -print -quit | grep -q .; then
