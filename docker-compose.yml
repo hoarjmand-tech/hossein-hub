@@ -10,6 +10,8 @@ services:
     secrets: [postgres_password]
     volumes:
       - ./postgres:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
     networks: [hub-backend]
     healthcheck:
       test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -87,13 +89,17 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_HOST: 127.0.0.1
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       HUB_API_KEY_FILE: /run/secrets/hub_api_key
-    secrets: [postgres_password,hub_api_key]
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
+      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
+    secrets: [postgres_password,hub_api_key,telegram_bot_token,telegram_admin_id]
     depends_on:
       postgres:
         condition: service_healthy
-    networks: [hub-backend]
+    network_mode: host
 
   nginx:
     image: nginx:1.27-alpine
