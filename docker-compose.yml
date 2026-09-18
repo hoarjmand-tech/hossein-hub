@@ -35,6 +35,25 @@ services:
       - ./archive:/archive
     expose: ["8080"]
     networks: [hub-backend]
+  ocr-worker:
+    build: ./app/backend
+    container_name: hossein-hub-ocr
+    restart: unless-stopped
+    command: ["python","-m","app.worker"]
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      ARCHIVE_ROOT: /archive
+    secrets: [postgres_password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./archive:/archive
+    networks: [hub-backend]
+
   nginx:
     image: nginx:1.27-alpine
     container_name: hossein-hub-nginx
