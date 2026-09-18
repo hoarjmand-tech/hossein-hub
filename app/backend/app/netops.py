@@ -17,6 +17,26 @@ def inv():
   return x if isinstance(x,list) else []
  except:return []
 
+def _secret(name):
+ try:return (ROOT/name).read_text().strip()
+ except:return ""
+
+def _netmiko_test(d):
+ from netmiko import ConnectHandler
+ dtype=d.get("device_type") or "cisco_ios"
+ kw={"device_type":dtype,"host":d["host"],"port":int(d.get("port",22)),"username":_secret(d.get("username_file","")) or d.get("username",""),"password":_secret(d.get("password_file","")),"secret":_secret(d.get("enable_secret_file","")),"fast_cli":False,"conn_timeout":8,"auth_timeout":10,"banner_timeout":10}
+ c=ConnectHandler(**kw)
+ try:
+  if kw["secret"]:
+   try:c.enable()
+   except:pass
+  cmd="get system status" if "fortinet" in dtype else ("/system resource print" if "mikrotik" in dtype else "show version")
+  out=c.send_command(cmd,read_timeout=45)
+  return {"ok":True,"command":cmd,"output":out[:12000],"prompt":c.find_prompt()}
+ finally:
+  try:c.disconnect()
+  except:pass
+
 def admin(u=Depends(current_user)):
  if not u.is_admin:raise HTTPException(403,"Admin required")
  return u
@@ -83,3 +103,21 @@ def import_discovered(x:ImportDiscovered,u=Depends(admin)):
  ROOT.mkdir(parents=True,exist_ok=True)
  INV.write_text(json.dumps(list(byid.values()),ensure_ascii=False,indent=2))
  return {"ok":True,"added":added,"updated":updated,"total":len(byid)}
+
+@r.post("/devices/test-all",dependencies=[Depends(csrf_guard)])
+def test_all(u=Depends(admin)):
+ from datetime import datetime
+ devices=inv();results=[];changed=False
+ for d in devices:
+  if not d.get("enabled",True):continue
+  if not d.get("username_file") or not d.get("password_file"):
+   results.append({"id":d.get("id"),"name":d.get("name"),"host":d.get("host"),"ok":False,"error":"No credentials"});continue
+  try:
+   x=_netmiko_test(d)
+   d["connection_ok"]=True;d["last_test"]=datetime.utcnow().isoformat()+"Z";d["last_prompt"]=x.get("prompt");d["detected_summary"]=(x.get("output") or "")[:1200];changed=True
+   results.append({"id":d.get("id"),"name":d.get("name"),"host":d.get("host"),"ok":True,"prompt":x.get("prompt"),"summary":(x.get("output") or "")[:500]})
+  except Exception as e:
+   d["connection_ok"]=False;d["last_test"]=datetime.utcnow().isoformat()+"Z";d["last_error"]=str(e)[:500];changed=True
+   results.append({"id":d.get("id"),"name":d.get("name"),"host":d.get("host"),"ok":False,"error":str(e)[:500]})
+ if changed:INV.write_text(json.dumps(devices,ensure_ascii=False,indent=2))
+ return {"total":len(results),"ok":sum(1 for x in results if x["ok"]),"failed":sum(1 for x in results if not x["ok"]),"results":results}
