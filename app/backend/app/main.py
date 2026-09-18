@@ -17,7 +17,9 @@ app.include_router(manage_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
-def home(): return FileResponse(WEB/"index.html",headers=NO_CACHE)
+def home(): return FileResponse(WEB/"home.html",headers=NO_CACHE)
+@app.get("/archive",include_in_schema=False)
+def archive_home(): return FileResponse(WEB/"index.html",headers=NO_CACHE)
 @app.get("/manifest.json",include_in_schema=False)
 def manifest(): return FileResponse(WEB/"manifest.json",media_type="application/manifest+json",headers=NO_CACHE)
 @app.get("/sw.js",include_in_schema=False)
