@@ -8,7 +8,7 @@ from .archive import r as archive_router
 from .auth import r as auth_router
 from .extras import r as extras_router
 Base.metadata.create_all(engine)
-app=FastAPI(title="Hossein Hub",version="0.6.0")
+app=FastAPI(title="Hossein Hub",version="0.7.0")
 app.include_router(auth_router)
 app.include_router(archive_router)
 app.include_router(extras_router)
@@ -23,4 +23,4 @@ def sw(): return FileResponse(WEB/"sw.js",media_type="application/javascript",he
 @app.get("/health")
 def health():
  with engine.connect() as c:c.execute(text("select 1"))
- return {"status":"ok","database":"ok","module":"archive","version":"0.6.0"}
+ return {"status":"ok","database":"ok","module":"archive","version":"0.7.0"}
