@@ -3,7 +3,7 @@ from sqlalchemy import select,func
 from sqlalchemy.orm import Session
 from .core import get_db
 from .auth import current_user
-from .models import ManagedAsset,SystemAlert,Document,Reminder,Notification,ShareLink,NetworkChangeJob,DeviceConfigSnapshot,User
+from .models import ManagedAsset,SystemAlert,Document,Reminder,Notification,ShareLink,NetworkChangeJob,DeviceConfigSnapshot,User,AutomationTask,ComplianceResult
 r=APIRouter(prefix="/api/overview",dependencies=[Depends(current_user)])
 @r.get("")
 def overview(db:Session=Depends(get_db)):
@@ -17,5 +17,7 @@ def overview(db:Session=Depends(get_db)):
   "active_shares":db.scalar(select(func.count()).select_from(ShareLink).where(ShareLink.active==True)) or 0,
   "netops_failed":db.scalar(select(func.count()).select_from(NetworkChangeJob).where(NetworkChangeJob.status=="failed")) or 0,
   "config_snapshots":db.scalar(select(func.count()).select_from(DeviceConfigSnapshot)) or 0,
-  "users":db.scalar(select(func.count()).select_from(User).where(User.active==True)) or 0
+  "users":db.scalar(select(func.count()).select_from(User).where(User.active==True)) or 0,
+  "automation_failed":db.scalar(select(func.count()).select_from(AutomationTask).where(AutomationTask.last_status=="failed")) or 0,
+  "compliance_failed":db.scalar(select(func.count()).select_from(ComplianceResult).where(ComplianceResult.status=="fail")) or 0
  }
