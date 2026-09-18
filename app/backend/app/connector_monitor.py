@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime
 from sqlalchemy import select
 from .core import SessionLocal
-from .models import SystemAlert,Notification
+from .models import SystemAlert,Notification,ConnectorSample
 from .connectors import fortigate_summary,vmware_inventory,veeam_summary
 
 def sec(p):
@@ -34,10 +34,10 @@ def save_state(x):
 def check(name,fn):
  try:
   r=fn() or {}
-  if not r.get("configured"):return "unconfigured","not configured"
-  if r.get("ok"):return "up","connected"
-  return "down",str(r.get("error") or "connector error")[:300]
- except Exception as e:return "down",str(e)[:300]
+  if not r.get("configured"):return "unconfigured","not configured",{}
+  if r.get("ok"):return "up","connected",r.get("data") if isinstance(r.get("data"),dict) else {}
+  return "down",str(r.get("error") or "connector error")[:300],{}
+ except Exception as e:return "down",str(e)[:300],{}
 
 while True:
  try:
@@ -49,7 +49,7 @@ while True:
   }
   with SessionLocal() as db:
    for name,fn in checks.items():
-    status,msg=check(name,fn);new[name]={"status":status,"at":datetime.utcnow().isoformat()+"Z","message":msg}
+    status,msg,detail=check(name,fn);new[name]={"status":status,"at":datetime.utcnow().isoformat()+"Z","message":msg};db.add(ConnectorSample(connector=name,status=status,summary_json=json.dumps(detail,ensure_ascii=False)[:20000]))
     prev=(old.get(name) or {}).get("status")
     if prev and prev!=status and status=="down":
      title=f"{name} Connector قطع شد"
