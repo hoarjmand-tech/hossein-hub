@@ -1,12 +1,12 @@
 <!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><script src="https://telegram.org/js/telegram-web-app.js?63"></script><title>Hossein Hub</title><style>
-*{box-sizing:border-box}body{margin:0;padding:calc(14px + var(--tg-content-safe-area-inset-top,0px)) 12px calc(20px + var(--tg-content-safe-area-inset-bottom,0px));font-family:Tahoma,Arial;background:var(--tg-theme-bg-color,#eef2f7);color:var(--tg-theme-text-color,#111827)}h1{font-size:22px;margin:6px 0}.sub{color:var(--tg-theme-hint-color,#64748b);font-size:13px}.stats,.grid{display:grid;gap:10px}.stats{grid-template-columns:repeat(4,1fr);margin:12px 0}.grid{grid-template-columns:1fr 1fr}.card,.stat,.doc{background:var(--tg-theme-secondary-bg-color,#fff);padding:14px;border-radius:15px}.n{font-size:24px;font-weight:bold;margin-top:4px}.mod{text-decoration:none;color:inherit;display:block}.mod h3{font-size:14px;margin:7px 0 3px}.ico{font-size:24px}.badge{font-size:11px;opacity:.72}.ok{color:#16803a}.bad{color:#b42318}.btn{display:block;text-decoration:none;text-align:center;background:var(--tg-theme-button-color,#2481cc);color:var(--tg-theme-button-text-color,#fff);padding:12px;border-radius:12px;margin:12px 0}@media(max-width:420px){.stats{grid-template-columns:1fr 1fr}}</style></head><body>
+*{box-sizing:border-box}body{margin:0;padding:calc(14px + var(--tg-content-safe-area-inset-top,0px)) 12px calc(20px + var(--tg-content-safe-area-inset-bottom,0px));font-family:Tahoma,Arial;background:var(--tg-theme-bg-color,#eef2f7);color:var(--tg-theme-text-color,#111827)}h1{font-size:22px;margin:6px 0}.sub{color:var(--tg-theme-hint-color,#64748b);font-size:13px}.stats,.grid{display:grid;gap:10px}.stats{grid-template-columns:repeat(6,1fr);margin:12px 0}.grid{grid-template-columns:1fr 1fr}.card,.stat,.doc{background:var(--tg-theme-secondary-bg-color,#fff);padding:14px;border-radius:15px}.n{font-size:24px;font-weight:bold;margin-top:4px}.mod{text-decoration:none;color:inherit;display:block}.mod h3{font-size:14px;margin:7px 0 3px}.ico{font-size:24px}.badge{font-size:11px;opacity:.72}.ok{color:#16803a}.bad{color:#b42318}.btn{display:block;text-decoration:none;text-align:center;background:var(--tg-theme-button-color,#2481cc);color:var(--tg-theme-button-text-color,#fff);padding:12px;border-radius:12px;margin:12px 0}@media(max-width:420px){.stats{grid-template-columns:1fr 1fr}}</style></head><body>
 <h1>Hossein Hub</h1><div id="who" class="sub">در حال احراز هویت…</div>
 
 <div class="stats">
   <div class="stat">اسناد<div id="docs" class="n">—</div></div>
   <div class="stat">تجهیزات<div id="assets" class="n">—</div></div>
   <div class="stat">Down<div id="down" class="n bad">—</div></div>
-  <div class="stat">هشدار<div id="alerts" class="n">—</div></div>
+  <div class="stat">هشدار<div id="alerts" class="n">—</div></div><div class="stat">Compliance<div id="compfail" class="n bad">—</div></div><div class="stat">Automation<div id="autofail" class="n bad">—</div></div>
 </div>
 
 <div class="grid">
@@ -37,7 +37,7 @@ function clean(v){return String(v??"").replace(/[&<>]/g,"")}
  if(!init)throw Error("این صفحه را از داخل بات تلگرام باز کن.");
  let a=await post("login");who.textContent="سلام "+(a.user.first_name||a.user.username||"");
  let d=await post("dashboard");docs.textContent=d.documents;
- let ov=await get("/api/overview");assets.textContent=ov.assets;down.textContent=ov.assets_down;alerts.textContent=ov.alerts_open;let hs=await get("/api/infra-history/summary?hours=24");infraHealth.innerHTML=Object.entries(hs).map(([k,v])=>"<div style='display:flex;justify-content:space-between;padding:5px 0'><span>"+clean(k)+"</span><b class='"+(v.last_status==="up"?"ok":"bad")+"'>"+(v.uptime_pct==null?"—":v.uptime_pct+"%")+"</b></div>").join("");
+ let ov=await get("/api/overview");assets.textContent=ov.assets;down.textContent=ov.assets_down;alerts.textContent=ov.alerts_open;compfail.textContent=ov.compliance_failed;autofail.textContent=ov.automation_failed;let hs=await get("/api/infra-history/summary?hours=24");infraHealth.innerHTML=Object.entries(hs).map(([k,v])=>"<div style='display:flex;justify-content:space-between;padding:5px 0'><span>"+clean(k)+"</span><b class='"+(v.last_status==="up"?"ok":"bad")+"'>"+(v.uptime_pct==null?"—":v.uptime_pct+"%")+"</b></div>").join("");
  let x=await post("documents");list.innerHTML=x.map(v=>"<div class='doc'><b>"+clean(v.title)+"</b><div class='badge'>"+clean(v.category)+(v.expiry_date?" · "+clean(v.expiry_date):"")+"</div></div>").join("")||"<div class='sub'>سندی ثبت نشده است.</div>";
 }catch(e){who.textContent=e.message}})();
 </script></body></html>
