@@ -65,3 +65,9 @@ def ack(xid:str,db:Session=Depends(get_db)):
 @r.get("/dashboard")
 def dashboard(db:Session=Depends(get_db)):
  return {"assets":db.scalar(select(func.count()).select_from(ManagedAsset)) or 0,"up":db.scalar(select(func.count()).select_from(ManagedAsset).where(ManagedAsset.last_status=="up")) or 0,"down":db.scalar(select(func.count()).select_from(ManagedAsset).where(ManagedAsset.last_status=="down")) or 0,"alerts":db.scalar(select(func.count()).select_from(SystemAlert).where(SystemAlert.acknowledged==False)) or 0}
+
+@r.post("/alerts/ack-all")
+def ack_all(db:Session=Depends(get_db)):
+ for x in db.scalars(select(SystemAlert).where(SystemAlert.acknowledged==False)):
+  x.acknowledged=True
+ db.commit();return {"ok":True}
