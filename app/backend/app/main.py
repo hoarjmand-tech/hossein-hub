@@ -11,8 +11,9 @@ from .manage import r as manage_router
 from .telegram_app import r as telegram_router
 from .it import r as it_router
 from .assistant import r as assistant_router
+from .system_api import r as system_router
 Base.metadata.create_all(engine)
-app=FastAPI(title="Hossein Hub",version="1.2.0")
+app=FastAPI(title="Hossein Hub",version="2.0.0")
 app.include_router(auth_router)
 app.include_router(archive_router)
 app.include_router(extras_router)
@@ -20,10 +21,19 @@ app.include_router(manage_router)
 app.include_router(telegram_router)
 app.include_router(it_router)
 app.include_router(assistant_router)
+app.include_router(system_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
 def home(): return FileResponse(WEB/"home.html",headers=NO_CACHE)
+@app.get("/assistant",include_in_schema=False)
+def assistant_home(): return FileResponse(WEB/"assistant.html",headers=NO_CACHE)
+@app.get("/notifications",include_in_schema=False)
+def notifications_home(): return FileResponse(WEB/"notifications.html",headers=NO_CACHE)
+@app.get("/backups",include_in_schema=False)
+def backups_home(): return FileResponse(WEB/"backups.html",headers=NO_CACHE)
+@app.get("/settings",include_in_schema=False)
+def settings_home(): return FileResponse(WEB/"settings.html",headers=NO_CACHE)
 @app.get("/it",include_in_schema=False)
 def it_home(): return FileResponse(WEB/"it.html",headers=NO_CACHE)
 @app.get("/telegram",include_in_schema=False)
@@ -37,4 +47,4 @@ def sw(): return FileResponse(WEB/"sw.js",media_type="application/javascript",he
 @app.get("/health")
 def health():
  with engine.connect() as c:c.execute(text("select 1"))
- return {"status":"ok","database":"ok","module":"archive","version":"1.2.0"}
+ return {"status":"ok","database":"ok","module":"hub","version":"2.0.0"}
