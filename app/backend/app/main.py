@@ -17,6 +17,8 @@ from .bulk_import import r as bulk_router
 from .it_history import r as it_history_router
 from .admin import r as admin_router
 from .reports import r as reports_router
+from .connectors import r as connectors_router
+from .ops_assistant import r as ops_assistant_router
 Base.metadata.create_all(engine)
 app=FastAPI(title="Hossein Hub",version="2.0.0")
 app.include_router(auth_router)
@@ -32,10 +34,16 @@ app.include_router(bulk_router)
 app.include_router(it_history_router)
 app.include_router(admin_router)
 app.include_router(reports_router)
+app.include_router(connectors_router)
+app.include_router(ops_assistant_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
 def home(): return FileResponse(WEB/"home.html",headers=NO_CACHE)
+@app.get("/connectors",include_in_schema=False)
+def connectors_home(): return FileResponse(WEB/"connectors.html",headers=NO_CACHE)
+@app.get("/ops",include_in_schema=False)
+def ops_home(): return FileResponse(WEB/"ops.html",headers=NO_CACHE)
 @app.get("/imports",include_in_schema=False)
 def imports_home(): return FileResponse(WEB/"imports.html",headers=NO_CACHE)
 @app.get("/admin",include_in_schema=False)
