@@ -12,6 +12,8 @@
 let CSRF="";
 async function api(u,o={}){if(o.method&&o.method!=="GET")o.headers={...(o.headers||{}),"Content-Type":"application/json","X-CSRF-Token":CSRF};let r=await fetch(u,o);if(r.status===401){location="/archive";throw 0}if(!r.ok)throw Error(await r.text());return r.json()}
 async function loadTasks(){let x=await api("/api/automation/tasks");tasks.innerHTML=x.map(z=>"<tr><td>"+z.name+"</td><td>"+z.kind+"</td><td>"+z.interval_minutes+"m</td><td class='"+(z.last_status==="failed"?"bad":"ok")+"'>"+z.last_status+"</td><td><button onclick=\"runNow('"+z.id+"')\">Run now</button></td></tr>").join("")}
+async function toggleTask(id,v){await api("/api/automation/tasks/"+id+"/state",{method:"PATCH",body:JSON.stringify({enabled:v})});loadTasks()}
+async function delTask(id){if(!confirm("Delete task?"))return;await api("/api/automation/tasks/"+id,{method:"DELETE"});loadTasks()}
 async function runNow(id){await api("/api/automation/tasks/"+id+"/run-now",{method:"POST"});msg.textContent="برای اجرا Queue شد.";setTimeout(loadTasks,1500)}
 async function addTask(){let config={};try{config=cfg.value.trim()?JSON.parse(cfg.value):{}}catch(e){msg.textContent="JSON تنظیمات نامعتبر است";return}await api("/api/automation/tasks",{method:"POST",body:JSON.stringify({name:name.value,kind:kind.value,interval_minutes:Number(mins.value),enabled:true,config})});name.value="";cfg.value="";loadTasks()}
 async function loadCompliance(){let x=await api("/api/automation/compliance");comp.innerHTML=x.map(z=>"<tr><td>"+z.device_name+"</td><td>"+z.policy_name+"</td><td class='"+(z.status==="pass"?"ok":"bad")+"'>"+z.status+"</td><td>"+(z.detail||"")+"</td><td>"+z.checked_at+"</td></tr>").join("")}
