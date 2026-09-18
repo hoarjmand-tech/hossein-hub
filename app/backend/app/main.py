@@ -24,6 +24,7 @@ from .infra_history import r as infra_history_router
 from .netops import r as netops_router
 from .netops_discovery import r as netops_discovery_router
 from .netops_config import r as netops_config_router
+from .automation_api import r as automation_router
 Base.metadata.create_all(engine)
 app=FastAPI(title="Hossein Hub",version="2.0.0")
 app.include_router(auth_router)
@@ -46,6 +47,7 @@ app.include_router(infra_history_router)
 app.include_router(netops_router)
 app.include_router(netops_discovery_router)
 app.include_router(netops_config_router)
+app.include_router(automation_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
@@ -84,6 +86,8 @@ def it_home(): return FileResponse(WEB/"it.html",headers=NO_CACHE)
 def telegram_miniapp(): return FileResponse(WEB/"telegram.html",headers=NO_CACHE)
 @app.get("/shares",include_in_schema=False)
 def shares_home(): return FileResponse(WEB/"shares.html",headers=NO_CACHE)
+@app.get("/automation",include_in_schema=False)
+def automation_home(): return FileResponse(WEB/"automation.html",headers=NO_CACHE)
 @app.get("/archive",include_in_schema=False)
 def archive_home(): return FileResponse(WEB/"index.html",headers=NO_CACHE)
 @app.get("/manifest.json",include_in_schema=False)
