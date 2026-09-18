@@ -21,6 +21,9 @@ def admin(u=Depends(current_user)):
  if not u.is_admin:raise HTTPException(403,"Admin required")
  return u
 
+class ImportDiscovered(BaseModel):
+ devices:list[dict]
+
 class Change(BaseModel):
  device_id:str=Field(min_length=1,max_length=120)
  commands:list[str]=Field(min_length=1,max_length=500)
@@ -51,3 +54,32 @@ def create(x:Change,db:Session=Depends(get_db),u=Depends(admin)):
   change_commands="\n".join(x.commands),precheck_commands="\n".join(x.precheck),postcheck_commands="\n".join(x.postcheck),rollback_commands="\n".join(x.rollback))
  db.add(j);db.flush();db.add(Audit(action="netops.change.queue",object_type="network_device",object_id=j.id,detail=f"{j.device_name} by {u.username}"));db.commit()
  return {"ok":True,"job_id":j.id,"status":"queued"}
+
+@r.post("/devices/import-discovered",dependencies=[Depends(csrf_guard)])
+def import_discovered(x:ImportDiscovered,u=Depends(admin)):
+ devices=inv()
+ byid={str(d.get("id")):d for d in devices}
+ added=0;updated=0
+ for z in x.devices:
+  host=str(z.get("host") or "").strip()
+  if not host: continue
+  did="auto-"+host.replace(".","-").replace(":","-")
+  d=byid.get(did,{})
+  before=bool(d)
+  d.update({
+   "id":did,
+   "name":z.get("name") or host,
+   "host":host,
+   "port":22 if 22 in (z.get("ports") or []) else (8291 if 8291 in (z.get("ports") or []) else 22),
+   "device_type":z.get("device_type") or "unknown",
+   "site":"auto-discovered",
+   "role":z.get("role") or "unknown",
+   "enabled":True,
+   "discovered":True
+  })
+  byid[did]=d
+  if before: updated+=1
+  else: added+=1
+ ROOT.mkdir(parents=True,exist_ok=True)
+ INV.write_text(json.dumps(list(byid.values()),ensure_ascii=False,indent=2))
+ return {"ok":True,"added":added,"updated":updated,"total":len(byid)}
