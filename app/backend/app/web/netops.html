@@ -9,7 +9,8 @@
 <button onclick="submitJob()">Queue Change</button><div id="msg"></div></section>
 <section class="p"><h2>آخرین Jobها</h2><table><thead><tr><th>Device</th><th>Status</th><th>Time</th></tr></thead><tbody id="jobs"></tbody></table></section>
 </div>
-<section class="p"><h2>Job Detail</h2><pre id="detail">یک Job را انتخاب کن.</pre></section>
+<section class="p"><h2>Live Read-Only Console</h2><input id="readcmd" placeholder="show version"><button onclick="runReadCommand()">Run Command</button><pre id="readout">خروجی دستور اینجا نمایش داده می‌شود.</pre></section>
+<section class="p"><h2>Device Detail / Job Detail</h2><button onclick="showDevice()">نمایش مشخصات Device</button><pre id="detail">یک Job یا Device را انتخاب کن.</pre></section>
 </main><script>
 let CSRF="";async function api(u,o={}){if(o.method&&o.method!=="GET")o.headers={...(o.headers||{}),"Content-Type":"application/json","X-CSRF-Token":CSRF};let r=await fetch(u,o);if(r.status===401){location="/archive";throw 0}if(!r.ok)throw Error(await r.text());return r.json()}
 function lines(x){return x.split("\n").map(z=>z.trim()).filter(Boolean)}
@@ -24,5 +25,7 @@ async function showDiff(){try{let x=await api("/api/netops-config/"+device.value
 async function submitJob(){msg.textContent="";try{let x=await api("/api/netops/jobs",{method:"POST",body:JSON.stringify({device_id:device.value,commands:lines(cmd.value),precheck:lines(pre.value),postcheck:lines(post.value),rollback:lines(rb.value)})});msg.innerHTML="<span class='ok'>Queued: "+x.job_id+"</span>";loadJobs()}catch(e){msg.innerHTML="<span class='warn'>"+e.message+"</span>"}}
 async function loadJobs(){let x=await api("/api/netops/jobs");jobs.innerHTML=x.map(z=>"<tr onclick=\"showJob('"+z.id+"')\" style='cursor:pointer'><td>"+z.device_name+"</td><td>"+z.status+"</td><td>"+(z.created_at||"")+"</td></tr>").join("")}
 async function showJob(id){let x=await api("/api/netops/jobs/"+id);detail.textContent=JSON.stringify(x,null,2)}
+async function showDevice(){if(!device.value)return;let x=await api("/api/netops/devices/"+device.value);detail.textContent=JSON.stringify(x,null,2)}
+async function runReadCommand(){if(!device.value||!readcmd.value.trim())return;readout.textContent="در حال اجرا...";try{let x=await api("/api/netops/devices/"+device.value+"/command",{method:"POST",body:JSON.stringify({command:readcmd.value.trim()})});readout.textContent=x.output||""}catch(e){readout.textContent=e.message}}
 setInterval(loadJobs,5000);init();
 </script></body></html>
