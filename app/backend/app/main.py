@@ -36,6 +36,8 @@ WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
 def home(): return FileResponse(WEB/"home.html",headers=NO_CACHE)
+@app.get("/imports",include_in_schema=False)
+def imports_home(): return FileResponse(WEB/"imports.html",headers=NO_CACHE)
 @app.get("/admin",include_in_schema=False)
 def admin_home(): return FileResponse(WEB/"admin.html",headers=NO_CACHE)
 @app.get("/reports",include_in_schema=False)
