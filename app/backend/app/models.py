@@ -65,3 +65,13 @@ class NetworkChangeJob(Base):
  created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
  started_at:Mapped[datetime|None]=mapped_column(DateTime)
  finished_at:Mapped[datetime|None]=mapped_column(DateTime)
+
+class DeviceConfigSnapshot(Base):
+ __tablename__="device_config_snapshots"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ device_id:Mapped[str]=mapped_column(String(120),index=True)
+ device_name:Mapped[str]=mapped_column(String(200),index=True)
+ config_text:Mapped[str]=mapped_column(Text)
+ sha256:Mapped[str]=mapped_column(String(64),index=True)
+ source:Mapped[str]=mapped_column(String(50),default="manual")
+ created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
