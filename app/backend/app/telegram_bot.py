@@ -14,7 +14,7 @@ API=f"https://api.telegram.org/bot{TOKEN}/"
 def call(method,**data):
  r=S.post(API+method,json=data,timeout=45);r.raise_for_status();return r.json()
 def keyboard():
- return {"inline_keyboard":[[{"text":"🚀 باز کردن Hossein Hub","web_app":{"url":APP}}]]}
+ return {"inline_keyboard":[[{"text":"🚀 باز کردن Hossein Hub","web_app":{"url":APP}}],[{"text":"📡 Infrastructure","web_app":{"url":APP+"#infra"}},{"text":"🗂️ Archive","web_app":{"url":APP+"#archive"}}]]}
 def main():
  try:
   call("setMyCommands",commands=[{"command":"start","description":"باز کردن Hossein Hub"},{"command":"app","description":"Mini App"},{"command":"status","description":"وضعیت سیستم"}])
