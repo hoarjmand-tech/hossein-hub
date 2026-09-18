@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime,timedelta
 from sqlalchemy import select,func
 from .core import SessionLocal
-from .models import AutomationTask,ComplianceResult,ManagedAsset,CheckResult,SystemAlert,Notification,DeviceConfigSnapshot,Document,Reminder,NetworkChangeJob
+from .models import AutomationTask,ComplianceResult,ManagedAsset,CheckResult,SystemAlert,Notification,DeviceConfigSnapshot,Document,Reminder,NetworkChangeJob,NetworkNeighborSnapshot
 
 TOKEN_FILE=os.getenv("TELEGRAM_BOT_TOKEN_FILE","/run/secrets/telegram_bot_token")
 ADMIN_FILE=os.getenv("TELEGRAM_ADMIN_ID_FILE","/run/secrets/telegram_admin_id")
@@ -66,6 +66,36 @@ def run_compliance(db,config):
    db.add(ComplianceResult(device_id=s.device_id,device_name=s.device_name,policy_name=p.get("name","Policy"),status=status,detail="; ".join(issues) if issues else "OK"))
  return f"checked={total}, failed={fail}"
 
+
+def run_topology(db):
+ from .topology import inv,connect,commands,parse
+ from sqlalchemy import delete
+ devices=inv();total=0;failed=0;stamp=datetime.utcnow()
+ for d in devices:
+  if not d.get("enabled",True) or not d.get("username_file"):continue
+  c=None;found=[]
+  try:
+   c=connect(d)
+   for cmd in commands(d.get("device_type") or ""):
+    try:
+     raw=c.send_command(cmd,read_timeout=90)
+     found=parse(raw,"lldp" if "lldp" in cmd.lower() or "neighbor" in cmd.lower() else "cdp")
+     if found:break
+    except Exception:
+     pass
+   db.execute(delete(NetworkNeighborSnapshot).where(NetworkNeighborSnapshot.local_device_id==str(d.get("id"))))
+   for n in found:
+    db.add(NetworkNeighborSnapshot(local_device_id=str(d.get("id")),local_device_name=d.get("name") or d.get("host"),local_interface=n.get("local_interface"),neighbor_name=n.get("neighbor_name"),neighbor_ip=n.get("neighbor_ip"),neighbor_interface=n.get("neighbor_interface"),platform=n.get("platform"),protocol=n.get("protocol"),raw_text=n.get("raw_text"),collected_at=stamp))
+   total+=len(found)
+  except Exception:
+   failed+=1
+  finally:
+   try:
+    if c:c.disconnect()
+   except:
+    pass
+ return f"neighbors={total}, device_failures={failed}"
+
 def daily_summary(db):
  docs=db.scalar(select(func.count()).select_from(Document).where(Document.deleted==False)) or 0
  reminders=db.scalar(select(func.count()).select_from(Reminder).where(Reminder.done==False)) or 0
@@ -83,7 +113,8 @@ def ensure_defaults(db):
  db.add_all([
   AutomationTask(name="IT Health Check",kind="it_check_all",interval_minutes=5,enabled=True,next_run=datetime.utcnow()),
   AutomationTask(name="NetOps Compliance",kind="compliance_scan",interval_minutes=60,enabled=True,config_json=json.dumps({"policies":[{"name":"No HTTP management","forbid":["ip http server","set admin-http enable"]}]},ensure_ascii=False),next_run=datetime.utcnow()),
-  AutomationTask(name="Daily Management Summary",kind="daily_summary",interval_minutes=1440,enabled=True,next_run=datetime.utcnow())
+  AutomationTask(name="Daily Management Summary",kind="daily_summary",interval_minutes=1440,enabled=True,next_run=datetime.utcnow()),
+  AutomationTask(name="Topology Discovery",kind="topology_collect",interval_minutes=360,enabled=True,next_run=datetime.utcnow())
  ]);db.commit()
 
 while True:
@@ -98,6 +129,7 @@ while True:
      if t.kind=="it_check_all":detail=run_it(db)
      elif t.kind=="compliance_scan":detail=run_compliance(db,cfg)
      elif t.kind=="daily_summary":detail=daily_summary(db)
+     elif t.kind=="topology_collect":detail=run_topology(db)
      else:raise RuntimeError("Unknown task kind")
      t.last_status="success";t.last_error=None;t.last_run=now;t.next_run=now+timedelta(minutes=t.interval_minutes)
      db.add(Notification(kind="automation",title=f"Automation OK: {t.name}",body=detail[:1000]))
