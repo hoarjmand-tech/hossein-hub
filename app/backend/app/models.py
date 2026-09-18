@@ -75,3 +75,27 @@ class DeviceConfigSnapshot(Base):
  sha256:Mapped[str]=mapped_column(String(64),index=True)
  source:Mapped[str]=mapped_column(String(50),default="manual")
  created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
+
+class AutomationTask(Base):
+ __tablename__="automation_tasks"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ name:Mapped[str]=mapped_column(String(200),index=True)
+ kind:Mapped[str]=mapped_column(String(80),index=True)
+ interval_minutes:Mapped[int]=mapped_column(Integer,default=1440)
+ enabled:Mapped[bool]=mapped_column(Boolean,default=True,index=True)
+ config_json:Mapped[str|None]=mapped_column(Text)
+ last_status:Mapped[str]=mapped_column(String(30),default="never",index=True)
+ last_error:Mapped[str|None]=mapped_column(Text)
+ last_run:Mapped[datetime|None]=mapped_column(DateTime,index=True)
+ next_run:Mapped[datetime|None]=mapped_column(DateTime,index=True)
+ created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
+
+class ComplianceResult(Base):
+ __tablename__="compliance_results"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ device_id:Mapped[str]=mapped_column(String(120),index=True)
+ device_name:Mapped[str]=mapped_column(String(200),index=True)
+ policy_name:Mapped[str]=mapped_column(String(200),index=True)
+ status:Mapped[str]=mapped_column(String(30),index=True)
+ detail:Mapped[str|None]=mapped_column(Text)
+ checked_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
