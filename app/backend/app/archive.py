@@ -9,7 +9,7 @@ from .core import get_db,ARCHIVE_ROOT,MAX_UPLOAD
 from .auth import current_user,csrf_guard
 from .models import *
 from .schemas import *
-from .services import extract_text,thumbnail
+from .services import extract_text,thumbnail,safe_name,detected_mime
 r=APIRouter(prefix="/api/archive",dependencies=[Depends(current_user),Depends(csrf_guard)])
 DOCS=ARCHIVE_ROOT/"documents"; PREV=ARCHIVE_ROOT/"previews"; EXPORT=ARCHIVE_ROOT/"exports"
 for x in (DOCS,PREV,EXPORT):x.mkdir(parents=True,exist_ok=True)
@@ -35,10 +35,12 @@ def cases(db:Session=Depends(get_db)):return [{"id":x.id,"title":x.title,"status
 def create(file:UploadFile=File(...),title:str=Form(...),category:str=Form("other"),subtype:str|None=Form(None),person_id:str|None=Form(None),case_id:str|None=Form(None),country:str|None=Form(None),issuer:str|None=Form(None),document_number:str|None=Form(None),issue_date:date|None=Form(None),expiry_date:date|None=Form(None),notes:str|None=Form(None),kind:str=Form("original"),tags:str|None=Form(None),db:Session=Depends(get_db)):
  tmp=DOCS/f".tmp-{uuid.uuid4()}";sha,size=copyhash(file.file,tmp);dup=db.scalar(select(DocumentVersion).where(DocumentVersion.sha256==sha))
  if dup:tmp.unlink(missing_ok=True);raise HTTPException(409,{"duplicate_of":dup.document_id})
+ mime=detected_mime(tmp)
+ if mime!="application/pdf" and not mime.startswith("image/"):tmp.unlink(missing_ok=True);raise HTTPException(415,"Only PDF and image files are allowed")
  d=Document(title=title,category=category,subtype=subtype,person_id=person_id or None,case_id=case_id or None,country=country,issuer=issuer,document_number=document_number,issue_date=issue_date,expiry_date=expiry_date,notes=notes);db.add(d);db.flush()
  ext=Path(file.filename or "").suffix.lower()[:15];name=f"{d.id}/v1-{uuid.uuid4()}{ext}";target=DOCS/name;target.parent.mkdir(parents=True,exist_ok=True);tmp.replace(target)
- v=DocumentVersion(document_id=d.id,version=1,kind=kind,original_name=file.filename or "file",stored_name=name,mime_type=file.content_type,size=size,sha256=sha);db.add(v);db.flush()
- v.ocr_text=extract_text(target,file.content_type);v.ocr_status="done" if v.ocr_text else "empty";thumbnail(target,file.content_type,PREV/f"{v.id}.jpg")
+ v=DocumentVersion(document_id=d.id,version=1,kind=kind,original_name=file.filename or "file",stored_name=name,mime_type=mime,size=size,sha256=sha);db.add(v);db.flush()
+ v.ocr_text=extract_text(target,mime);v.ocr_status="done" if v.ocr_text else "empty";thumbnail(target,mime,PREV/f"{v.id}.jpg")
  for n in [z.strip().lower() for z in (tags or "").split(",") if z.strip()]:
   t=db.scalar(select(Tag).where(Tag.name==n)) or Tag(name=n);db.add(t);db.flush();db.add(DocumentTag(document_id=d.id,tag_id=t.id))
  log(db,"upload","document",d.id,file.filename);db.commit();return {"id":d.id,"version":1,"sha256":sha,"ocr":v.ocr_status}
@@ -48,8 +50,10 @@ def version(did:str,file:UploadFile=File(...),kind:str=Form("updated"),db:Sessio
  if not d or d.deleted:raise HTTPException(404)
  tmp=DOCS/f".tmp-{uuid.uuid4()}";sha,size=copyhash(file.file,tmp);dup=db.scalar(select(DocumentVersion).where(DocumentVersion.sha256==sha))
  if dup:tmp.unlink(missing_ok=True);raise HTTPException(409,{"duplicate_of":dup.document_id})
+ mime=detected_mime(tmp)
+ if mime!="application/pdf" and not mime.startswith("image/"):tmp.unlink(missing_ok=True);raise HTTPException(415,"Only PDF and image files are allowed")
  n=(db.scalar(select(func.max(DocumentVersion.version)).where(DocumentVersion.document_id==did)) or 0)+1;ext=Path(file.filename or "").suffix.lower()[:15];name=f"{did}/v{n}-{uuid.uuid4()}{ext}";p=DOCS/name;p.parent.mkdir(parents=True,exist_ok=True);tmp.replace(p)
- v=DocumentVersion(document_id=did,version=n,kind=kind,original_name=file.filename or "file",stored_name=name,mime_type=file.content_type,size=size,sha256=sha);db.add(v);db.flush();v.ocr_text=extract_text(p,file.content_type);v.ocr_status="done" if v.ocr_text else "empty";thumbnail(p,file.content_type,PREV/f"{v.id}.jpg");log(db,"version.add","document",did,str(n));db.commit();return {"version":n,"ocr":v.ocr_status}
+ v=DocumentVersion(document_id=did,version=n,kind=kind,original_name=file.filename or "file",stored_name=name,mime_type=mime,size=size,sha256=sha);db.add(v);db.flush();v.ocr_text=extract_text(p,mime);v.ocr_status="done" if v.ocr_text else "empty";thumbnail(p,mime,PREV/f"{v.id}.jpg");log(db,"version.add","document",did,str(n));db.commit();return {"version":n,"ocr":v.ocr_status}
 @r.get("/documents")
 def docs(q:str|None=None,category:str|None=None,person_id:str|None=None,case_id:str|None=None,deleted:bool=False,favorite:bool|None=None,limit:int=Query(100,le=500),db:Session=Depends(get_db)):
  s=select(Document).where(Document.deleted==deleted)
@@ -103,7 +107,7 @@ def export(ids:str,db:Session=Depends(get_db)):
    if not d or d.deleted:continue
    for v in db.scalars(select(DocumentVersion).where(DocumentVersion.document_id==did)):
     p=DOCS/v.stored_name
-    if p.exists():z.write(p,f"{d.title}/v{v.version}-{v.original_name}")
+    if p.exists():z.write(p,f"{safe_name(d.title)}/v{v.version}-{safe_name(v.original_name)}")
  buf.seek(0);log(db,"export","package",None,",".join(wanted));db.commit();return StreamingResponse(buf,media_type="application/zip",headers={"Content-Disposition":"attachment; filename=hossein-hub-export.zip"})
 @r.delete("/documents/{did}")
 def trash(did:str,db:Session=Depends(get_db)):
