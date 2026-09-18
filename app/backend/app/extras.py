@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .core import get_db,ARCHIVE_ROOT
-from .auth import current_user,csrf_guard
+from .auth import current_user,csrf_guard,csrf_guard
 from .models import Document,DocumentVersion,ShareLink,Reminder,Audit
 r=APIRouter()
 DOCS=ARCHIVE_ROOT/"documents"
@@ -23,7 +23,7 @@ def shared(token:str,db:Session=Depends(get_db)):
  d=db.get(Document,z.document_id);v=db.scalar(select(DocumentVersion).where(DocumentVersion.document_id==d.id).order_by(DocumentVersion.version.desc()))
  if not v or not (p:=DOCS/v.stored_name).exists():raise HTTPException(404)
  z.downloads+=1;db.add(Audit(action="share.download",object_type="document",object_id=d.id));db.commit();return FileResponse(p,media_type=v.mime_type,filename=v.original_name)
-@r.post("/api/archive/reminders/{rid}/done",dependencies=[Depends(current_user)])
+@r.post("/api/archive/reminders/{rid}/done",dependencies=[Depends(current_user),Depends(csrf_guard)])
 def reminder_done(rid:str,db:Session=Depends(get_db)):
  x=db.get(Reminder,rid)
  if not x:raise HTTPException(404)
