@@ -1,0 +1,6 @@
+[Unit]
+Description=Hossein Hub backup
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/hossein-hub
+ExecStart=/bin/bash /opt/hossein-hub/backup.sh
