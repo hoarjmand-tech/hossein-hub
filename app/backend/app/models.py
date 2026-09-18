@@ -139,3 +139,13 @@ class NetworkChangePolicy(Base):
  require_rollback:Mapped[bool]=mapped_column(Boolean,default=False)
  blocked_patterns_json:Mapped[str|None]=mapped_column(Text)
  created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
+
+class NetworkChangeValidation(Base):
+ __tablename__="network_change_validations"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ job_id:Mapped[str]=mapped_column(ForeignKey("network_change_jobs.id"),unique=True,index=True)
+ must_include_json:Mapped[str|None]=mapped_column(Text)
+ must_not_include_json:Mapped[str|None]=mapped_column(Text)
+ status:Mapped[str]=mapped_column(String(30),default="pending",index=True)
+ detail:Mapped[str|None]=mapped_column(Text)
+ checked_at:Mapped[datetime|None]=mapped_column(DateTime,index=True)
