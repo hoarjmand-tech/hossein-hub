@@ -103,6 +103,26 @@ services:
         condition: service_healthy
     network_mode: host
 
+  netops-worker:
+    build: ./app/backend
+    container_name: hossein-hub-netops
+    restart: unless-stopped
+    command: ["python","-m","app.netops_worker"]
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      NETOPS_SECRETS_ROOT: /run/netops-secrets
+    secrets: [postgres_password]
+    depends_on:
+      archive-api:
+        condition: service_healthy
+    volumes:
+      - ./secrets/netops:/run/netops-secrets:ro
+    network_mode: host
+
   connector-monitor:
     build: ./app/backend
     container_name: hossein-hub-connector-monitor
