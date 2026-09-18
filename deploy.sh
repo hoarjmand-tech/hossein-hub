@@ -3,7 +3,7 @@ set -Eeuo pipefail
 ROOT=/opt/hossein-hub;cd "$ROOT"
 echo "[1/9] Fetch";git fetch origin main
 echo "[2/9] Preserve runtime";mkdir -p /tmp/hossein-hub-deploy;cp -a .env /tmp/hossein-hub-deploy/.env 2>/dev/null||true;cp -a secrets /tmp/hossein-hub-deploy/secrets 2>/dev/null||true
-echo "[3/9] Sync";git reset --hard origin/main;cp -a /tmp/hossein-hub-deploy/.env .env 2>/dev/null||true;test -d /tmp/hossein-hub-deploy/secrets&&cp -a /tmp/hossein-hub-deploy/secrets/. secrets/||true;chmod +x deploy.sh backup.sh remote-access.sh 2>/dev/null||true
+echo "[3/9] Sync";git reset --hard origin/main;cp -a /tmp/hossein-hub-deploy/.env .env 2>/dev/null||true;test -d /tmp/hossein-hub-deploy/secrets&&cp -a /tmp/hossein-hub-deploy/secrets/. secrets/||true;chmod +x deploy.sh backup.sh remote-access.sh install-maintenance.sh 2>/dev/null||true
 echo "[4/9] Runtime";mkdir -p archive/{documents,previews,trash,import,exports} backups logs secrets config/nginx data/tailscale;chmod 700 secrets
 echo "[5/9] API secret";if [ ! -s secrets/hub_api_key ];then umask 077;openssl rand -hex 32 > secrets/hub_api_key;echo "Created secrets/hub_api_key";fi;chmod 600 secrets/hub_api_key secrets/postgres_password
 echo "[6/9] Network";docker network inspect hossein-hub-backend >/dev/null 2>&1||docker network create hossein-hub-backend
