@@ -3,7 +3,9 @@ set -Eeuo pipefail
 ROOT=/opt/hossein-hub
 DIR="$ROOT/secrets/netops"
 INV="$DIR/devices.json"
-mkdir -p "$DIR";chmod 700 "$DIR"
+sudo mkdir -p "$DIR"
+sudo chown -R "$(id -un)":"$(id -gn)" "$DIR"
+chmod 700 "$DIR"
 [ -f "$INV" ] || printf '[]\n' > "$INV"
 
 python3 - "$INV" "$DIR" <<'PY'
