@@ -22,6 +22,7 @@ from .ops_assistant import r as ops_assistant_router
 from .infra_analytics import r as infra_analytics_router
 from .infra_history import r as infra_history_router
 from .netops import r as netops_router
+from .netops_discovery import r as netops_discovery_router
 Base.metadata.create_all(engine)
 app=FastAPI(title="Hossein Hub",version="2.0.0")
 app.include_router(auth_router)
@@ -42,6 +43,7 @@ app.include_router(ops_assistant_router)
 app.include_router(infra_analytics_router)
 app.include_router(infra_history_router)
 app.include_router(netops_router)
+app.include_router(netops_discovery_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
