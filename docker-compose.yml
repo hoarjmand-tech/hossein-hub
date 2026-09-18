@@ -121,7 +121,7 @@ services:
       CONNECTOR_STATE_FILE: /data/connector_state.json
     secrets: [postgres_password,telegram_bot_token,telegram_admin_id]
     depends_on:
-      postgres:
+      archive-api:
         condition: service_healthy
     volumes:
       - ./secrets/connectors:/run/connector-secrets:ro
