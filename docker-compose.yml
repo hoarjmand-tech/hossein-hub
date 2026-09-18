@@ -7,8 +7,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets:
-      - postgres_password
+    secrets: [postgres_password]
     volumes:
       - ./postgres:/var/lib/postgresql/data
     networks: [hub-backend]
@@ -26,9 +25,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      HUB_API_KEY_FILE: /run/secrets/hub_api_key
       ARCHIVE_ROOT: /archive
-    secrets:
-      - postgres_password
+    secrets: [postgres_password,hub_api_key]
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,6 +39,8 @@ services:
 secrets:
   postgres_password:
     file: ./secrets/postgres_password
+  hub_api_key:
+    file: ./secrets/hub_api_key
 networks:
   hub-backend:
     external: true
