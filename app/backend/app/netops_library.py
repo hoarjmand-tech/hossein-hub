@@ -37,6 +37,15 @@ class PolicyIn(BaseModel):
  require_rollback:bool=False
  blocked_patterns:list[str]=[]
 
+def ensure_template_defaults(db):
+ if db.scalar(select(NetworkConfigTemplate).limit(1)):return
+ rows=[
+  NetworkConfigTemplate(name="Cisco - Create VLAN",vendor="cisco_ios",role="switch",description="Create VLAN with rollback",precheck="show vlan brief",change_commands="vlan {{vlan_id}}\nname {{vlan_name}}",postcheck="show vlan id {{vlan_id}}",rollback="no vlan {{vlan_id}}",variables_json=json.dumps(["vlan_id","vlan_name"]),enabled=True),
+  NetworkConfigTemplate(name="Cisco - Interface Description",vendor="cisco_ios",role="switch",description="Set interface description",precheck="show running-config interface {{interface}}",change_commands="interface {{interface}}\ndescription {{description}}",postcheck="show running-config interface {{interface}}",rollback="interface {{interface}}\nno description",variables_json=json.dumps(["interface","description"]),enabled=True),
+  NetworkConfigTemplate(name="FortiGate - Address Object",vendor="fortinet",role="firewall",description="Create firewall address object",precheck="show firewall address",change_commands="config firewall address\nedit {{name}}\nset subnet {{subnet}} {{mask}}\nnext\nend",postcheck="show firewall address {{name}}",rollback="config firewall address\ndelete {{name}}\nend",variables_json=json.dumps(["name","subnet","mask"]),enabled=True)
+ ]
+ db.add_all(rows);db.commit()
+
 def tj(x):
  return {"id":x.id,"name":x.name,"vendor":x.vendor,"role":x.role,"description":x.description,
  "precheck":x.precheck or "","change_commands":x.change_commands,"postcheck":x.postcheck or "",
@@ -44,6 +53,7 @@ def tj(x):
 
 @r.get("/templates")
 def templates(db:Session=Depends(get_db),u=Depends(admin)):
+ ensure_template_defaults(db)
  return [tj(x) for x in db.scalars(select(NetworkConfigTemplate).order_by(NetworkConfigTemplate.name))]
 
 @r.post("/templates",dependencies=[Depends(csrf_guard)])
