@@ -8,6 +8,7 @@ services:
       DRIVE_PUSH_TOKEN_FILE: /run/secrets/drive_push_token
       COOKIE_SECURE: "false"
       MAX_UPLOAD_MB: "100"
+      PUBLIC_BASE_URL: "https://hossein-hub.tailf8fccb.ts.net"
     secrets:
       - drive_push_token
     volumes:
