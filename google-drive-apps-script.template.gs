@@ -37,6 +37,7 @@ function syncHosseinHub() {
 
   if (errors.length) throw new Error(errors.join("\n"));
   props.setProperty("lastRunMs", String(now));
+  syncHosseinHubRenames();
 }
 
 function installHosseinHubTrigger() {
@@ -46,18 +47,20 @@ function installHosseinHubTrigger() {
 }
 
 
-function applyHosseinHubRenames() {
-  const props = PropertiesService.getScriptProperties();
-  const raw = props.getProperty("renameQueue") || "[]";
-  const jobs = JSON.parse(raw);
-  const left = [];
+function syncHosseinHubRenames() {
+  const response = UrlFetchApp.fetch(ENDPOINT.replace("/upload","/rename-jobs"), {
+    method: "get",
+    headers: {"X-Drive-Token": TOKEN},
+    muteHttpExceptions: true
+  });
+  if (response.getResponseCode() !== 200) return;
+  const jobs = JSON.parse(response.getContentText()).jobs || [];
   jobs.forEach(j => {
     try {
-      if (!j.fileId || !j.name) return;
-      DriveApp.getFileById(j.fileId).setName(j.name);
-    } catch (e) {
-      left.push(j);
-    }
+      const f=DriveApp.getFileById(j.fileId);
+      if (f.getName() !== j.name) f.setName(j.name);
+    } catch(e) {}
   });
-  props.setProperty("renameQueue", JSON.stringify(left));
 }
+
+function applyHosseinHubRenames() { syncHosseinHubRenames(); }
