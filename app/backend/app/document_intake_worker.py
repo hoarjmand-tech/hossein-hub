@@ -6,6 +6,7 @@ from .core import SessionLocal,ARCHIVE_ROOT
 from .models import Document,DocumentVersion,DocumentIntakeItem,DocumentSourceState,Audit,Tag,DocumentTag,Person
 from .services import detected_mime,extract_text,thumbnail
 from .document_intelligence import classify,canonical_filename
+from .local_document_ai import analyze_document
 
 DOCS=ARCHIVE_ROOT/"documents"
 PREV=ARCHIVE_ROOT/"previews"
@@ -67,6 +68,13 @@ def handle(db,source,p):
  try:text=extract_text(p,mime) or ""
  except Exception:pass
  meta=classify(text,p.name)
+ ai=analyze_document(text,p.name)
+ if ai and ai.get("confidence") in ("high","medium"):
+  if ai.get("title"): meta["title"]=str(ai["title"])[:180]
+  if ai.get("document_type") and meta.get("subtype")=="other": meta["subtype"]=str(ai["document_type"])[:80]
+  for k in ("person_name","country","issuer","document_number"):
+   if ai.get(k): meta[k]=str(ai[k])[:160]
+  meta["confidence"]=ai["confidence"]
  ext=p.suffix.lower()[:15]
  canonical=canonical_filename(meta,ext)
 
