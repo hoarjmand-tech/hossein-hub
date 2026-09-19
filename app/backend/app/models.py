@@ -149,3 +149,36 @@ class NetworkChangeValidation(Base):
  status:Mapped[str]=mapped_column(String(30),default="pending",index=True)
  detail:Mapped[str|None]=mapped_column(Text)
  checked_at:Mapped[datetime|None]=mapped_column(DateTime,index=True)
+
+class DocumentIntakeItem(Base):
+ __tablename__="document_intake_items"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ source:Mapped[str]=mapped_column(String(50),index=True)
+ source_key:Mapped[str|None]=mapped_column(String(500),index=True)
+ original_name:Mapped[str]=mapped_column(String(500))
+ sha256:Mapped[str]=mapped_column(String(64),index=True)
+ status:Mapped[str]=mapped_column(String(30),default="new",index=True)
+ document_id:Mapped[str|None]=mapped_column(ForeignKey("documents.id"),index=True)
+ detected_title:Mapped[str|None]=mapped_column(String(400))
+ detected_category:Mapped[str|None]=mapped_column(String(100),index=True)
+ detected_subtype:Mapped[str|None]=mapped_column(String(100))
+ detected_country:Mapped[str|None]=mapped_column(String(100))
+ detected_issuer:Mapped[str|None]=mapped_column(String(250))
+ detected_number:Mapped[str|None]=mapped_column(String(150))
+ detected_issue_date:Mapped[date|None]=mapped_column(Date)
+ detected_expiry_date:Mapped[date|None]=mapped_column(Date)
+ extracted_json:Mapped[str|None]=mapped_column(Text)
+ error:Mapped[str|None]=mapped_column(Text)
+ first_seen:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,index=True)
+ processed_at:Mapped[datetime|None]=mapped_column(DateTime,index=True)
+
+class DocumentSourceState(Base):
+ __tablename__="document_source_state"
+ id:Mapped[str]=mapped_column(String(36),primary_key=True,default=uid)
+ source:Mapped[str]=mapped_column(String(50),unique=True,index=True)
+ last_scan_at:Mapped[datetime|None]=mapped_column(DateTime,index=True)
+ last_success_at:Mapped[datetime|None]=mapped_column(DateTime,index=True)
+ last_error:Mapped[str|None]=mapped_column(Text)
+ items_seen:Mapped[int]=mapped_column(Integer,default=0)
+ items_imported:Mapped[int]=mapped_column(Integer,default=0)
+ duplicates_ignored:Mapped[int]=mapped_column(Integer,default=0)
