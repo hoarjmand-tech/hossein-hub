@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime
 from sqlalchemy import select
 from .core import SessionLocal,ARCHIVE_ROOT
-from .models import Document,DocumentVersion,DocumentIntakeItem,DocumentSourceState,Audit
+from .models import Document,DocumentVersion,DocumentIntakeItem,DocumentSourceState,Audit,Tag,DocumentTag
 from .services import detected_mime,extract_text,thumbnail
 from .document_intelligence import classify,canonical_filename
 
@@ -76,6 +76,12 @@ def handle(db,source,p):
   shutil.move(str(p),str(dest))
  v=DocumentVersion(document_id=d.id,version=1,kind="original",original_name=canonical,stored_name=stored,mime_type=mime,size=dest.stat().st_size,sha256=sh,ocr_status="done" if text else "pending",ocr_text=text or None)
  db.add(v);db.flush()
+ auto_tags=[source,meta.get("category"),meta.get("subtype"),meta.get("country"),meta.get("issuer"),"confidence-"+meta.get("confidence","low")]
+ for raw in [x for x in auto_tags if x]:
+  name=str(raw).strip().lower()[:100]
+  t=db.scalar(select(Tag).where(Tag.name==name))
+  if not t:t=Tag(name=name);db.add(t);db.flush()
+  if not db.get(DocumentTag,{"document_id":d.id,"tag_id":t.id}):db.add(DocumentTag(document_id=d.id,tag_id=t.id))
  try:thumbnail(dest,mime,PREV/f"{v.id}.jpg")
  except Exception:pass
 
