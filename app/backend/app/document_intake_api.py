@@ -53,7 +53,7 @@ def status(db:Session=Depends(get_db)):
   return {"source":name,"last_scan_at":x.last_scan_at if x else None,"last_success_at":x.last_success_at if x else None,
    "last_error":x.last_error if x else None,"items_seen":x.items_seen if x else 0,"items_imported":x.items_imported if x else 0,
    "duplicates_ignored":x.duplicates_ignored if x else 0}
- return {"local":s("local"),"google_drive":s("google_drive"),
+ return {"local":s("local"),"google_drive":s("google_drive"),"windows_i":s("windows_i"),
   "queued_local":sum(1 for x in INBOX.iterdir() if x.is_file()),"queued_drive":sum(1 for x in DRIVE.iterdir() if x.is_file())}
 
 @r.get("/history")
