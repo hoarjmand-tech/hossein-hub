@@ -260,7 +260,6 @@ services:
     image: rclone/rclone:1.70.3
     container_name: hossein-hub-drive-sync
     restart: unless-stopped
-    profiles: ["drive"]
     secrets: [rclone_config_pass]
     entrypoint: ["/bin/sh","-c"]
     command: >
@@ -273,7 +272,7 @@ services:
         --include "*.pdf" --include "*.PDF"
         --include "*.jpg" --include "*.jpeg" --include "*.png" --include "*.webp" --include "*.tif" --include "*.tiff"
         --ignore-existing --no-traverse --log-level INFO || true;
-        sleep 300;
+        sleep 15;
       done
     volumes:
       - ./archive:/archive
