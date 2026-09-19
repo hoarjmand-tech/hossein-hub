@@ -61,7 +61,7 @@ def handle(db,source,p):
  existing=db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.sha256==sh,DocumentIntakeItem.status=="imported"))
  if existing:
   st.duplicates_ignored+=1;db.commit()
-  if source!="google_drive":p.unlink(missing_ok=True)
+  if source not in ("google_drive","windows_i"):p.unlink(missing_ok=True)
   return
 
  text=""
@@ -80,7 +80,7 @@ def handle(db,source,p):
  db.add(d);db.flush()
  stored=f"{d.id}/v1-{uuid.uuid4()}{ext}"
  dest=DOCS/stored;dest.parent.mkdir(parents=True,exist_ok=True)
- if source in ("google_drive","windows_d"):
+ if source in ("google_drive","windows_i"):
   try:os.link(p,dest)
   except Exception:shutil.copy2(str(p),str(dest))
  else:
