@@ -54,11 +54,17 @@ def version(did:str,file:UploadFile=File(...),kind:str=Form("updated"),db:Sessio
  n=(db.scalar(select(func.max(DocumentVersion.version)).where(DocumentVersion.document_id==did)) or 0)+1;ext=Path(file.filename or "").suffix.lower()[:15];name=f"{did}/v{n}-{uuid.uuid4()}{ext}";p=DOCS/name;p.parent.mkdir(parents=True,exist_ok=True);tmp.replace(p)
  v=DocumentVersion(document_id=did,version=n,kind=kind,original_name=file.filename or "file",stored_name=name,mime_type=mime,size=size,sha256=sha);db.add(v);db.flush();log(db,"version.add","document",did,str(n));db.commit();return {"version":n,"ocr":"pending"}
 @r.get("/documents")
-def docs(q:str|None=None,category:str|None=None,person_id:str|None=None,case_id:str|None=None,deleted:bool=False,favorite:bool|None=None,limit:int=Query(100,le=500),db:Session=Depends(get_db)):
+def docs(q:str|None=None,category:str|None=None,subtype:str|None=None,country:str|None=None,issuer:str|None=None,person_id:str|None=None,case_id:str|None=None,deleted:bool=False,favorite:bool|None=None,expiring_days:int|None=None,limit:int=Query(100,le=500),db:Session=Depends(get_db)):
  s=select(Document).where(Document.deleted==deleted)
  if q:
   x=f"%{q}%";ocr_ids=select(DocumentVersion.document_id).where(DocumentVersion.ocr_text.ilike(x));tag_ids=select(DocumentTag.document_id).join(Tag,Tag.id==DocumentTag.tag_id).where(Tag.name.ilike(x));s=s.where(or_(Document.title.ilike(x),Document.notes.ilike(x),Document.document_number.ilike(x),Document.issuer.ilike(x),Document.id.in_(ocr_ids),Document.id.in_(tag_ids)))
  if category:s=s.where(Document.category==category)
+ if subtype:s=s.where(Document.subtype==subtype)
+ if country:s=s.where(Document.country==country)
+ if issuer:s=s.where(Document.issuer.ilike(f"%{issuer}%"))
+ if expiring_days is not None:
+  end=date.today()+timedelta(days=max(0,min(expiring_days,3650)))
+  s=s.where(Document.expiry_date!=None,Document.expiry_date<=end)
  if person_id:s=s.where(Document.person_id==person_id)
  if case_id:s=s.where(Document.case_id==case_id)
  if favorite is not None:s=s.where(Document.favorite==favorite)
@@ -126,3 +132,21 @@ def dashboard(db:Session=Depends(get_db)):
  return {"documents":db.scalar(select(func.count()).select_from(Document).where(Document.deleted==False)),"trash":db.scalar(select(func.count()).select_from(Document).where(Document.deleted==True)),"storage_bytes":db.scalar(select(func.coalesce(func.sum(DocumentVersion.size),0))),"people":db.scalar(select(func.count()).select_from(Person)),"cases":db.scalar(select(func.count()).select_from(Case)),"reminders":db.scalar(select(func.count()).select_from(Reminder).where(Reminder.done==False))}
 @r.get("/audit")
 def audit(limit:int=Query(100,le=500),db:Session=Depends(get_db)):return [{"action":x.action,"type":x.object_type,"object_id":x.object_id,"detail":x.detail,"at":x.at} for x in db.scalars(select(Audit).order_by(Audit.at.desc()).limit(limit))]
+
+@r.get("/facets")
+def facets(db:Session=Depends(get_db)):
+ def vals(col):
+  return [x for x in db.scalars(select(col).where(col!=None,Document.deleted==False).distinct().order_by(col)) if x]
+ return {"categories":vals(Document.category),"subtypes":vals(Document.subtype),"countries":vals(Document.country),"issuers":vals(Document.issuer)}
+
+@r.get("/smart-folders")
+def smart_folders(db:Session=Depends(get_db)):
+ today=date.today()
+ return {
+  "all":db.scalar(select(func.count()).select_from(Document).where(Document.deleted==False)) or 0,
+  "favorites":db.scalar(select(func.count()).select_from(Document).where(Document.deleted==False,Document.favorite==True)) or 0,
+  "expiring_30":db.scalar(select(func.count()).select_from(Document).where(Document.deleted==False,Document.expiry_date!=None,Document.expiry_date<=today+timedelta(days=30))) or 0,
+  "expiring_90":db.scalar(select(func.count()).select_from(Document).where(Document.deleted==False,Document.expiry_date!=None,Document.expiry_date<=today+timedelta(days=90))) or 0,
+  "expired":db.scalar(select(func.count()).select_from(Document).where(Document.deleted==False,Document.expiry_date!=None,Document.expiry_date<today)) or 0,
+  "uncategorized":db.scalar(select(func.count()).select_from(Document).where(Document.deleted==False,Document.category=="other")) or 0
+ }
