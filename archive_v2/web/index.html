@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hossein Archive</title>
+<style>
+:root{
+  --bg:#f4f7fb;--panel:#fff;--text:#142033;--muted:#748196;--line:#e5ebf3;
+  --nav:#0e1730;--nav2:#162342;--accent:#316ff6;--accent2:#18a675;--danger:#d63f4b;
+  --shadow:0 12px 34px rgba(24,39,75,.09);--r:18px
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Tahoma,Arial,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select{font:inherit}button{cursor:pointer}
+.hidden{display:none!important}
+#loginScreen{min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 15% 10%,#1d3970 0,#0b1224 42%,#070b16 100%)}
+.login-card{width:min(420px,92vw);background:rgba(255,255,255,.97);border-radius:28px;padding:34px;box-shadow:0 30px 90px #0007}
+.brandmark{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;background:linear-gradient(145deg,#316ff6,#18a675);color:white;font-weight:900;font-size:22px;box-shadow:0 10px 25px #316ff655}
+.login-card h1{margin:18px 0 6px;font-size:26px}.login-card p{margin:0 0 24px;color:var(--muted)}
+.field{width:100%;border:1px solid var(--line);border-radius:13px;padding:13px 14px;outline:none;background:#fbfcff}
+.field:focus{border-color:#90affb;box-shadow:0 0 0 4px #316ff615}
+.primary{border:0;background:var(--accent);color:white;border-radius:13px;padding:11px 16px;font-weight:700}
+.secondary{border:1px solid var(--line);background:white;color:var(--text);border-radius:13px;padding:10px 14px}
+.danger{border:0;background:#fff0f1;color:var(--danger);border-radius:12px;padding:9px 12px;font-weight:700}
+.success{border:0;background:#e9fbf4;color:#087451;border-radius:12px;padding:9px 12px;font-weight:700}
+#app{min-height:100vh}
+.shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+.sidebar{background:linear-gradient(180deg,var(--nav),#0a1021);color:white;padding:24px 16px;position:sticky;top:0;height:100vh}
+.side-brand{display:flex;align-items:center;gap:12px;padding:5px 8px 24px}.side-brand b{font-size:18px}.side-brand small{display:block;color:#91a0bf;margin-top:3px}
+.navbtn{width:100%;border:0;background:transparent;color:#dbe5f8;text-align:right;padding:12px 13px;border-radius:12px;margin:3px 0;display:flex;align-items:center;justify-content:space-between}
+.navbtn:hover,.navbtn.active{background:var(--nav2);color:white}.count{background:#ffffff16;border:1px solid #ffffff20;padding:2px 8px;border-radius:999px;font-size:11px}
+.main{padding:22px 26px 40px;min-width:0}
+.topbar{display:flex;gap:14px;align-items:center;margin-bottom:20px}
+.searchbox{flex:1;position:relative}.searchbox input{width:100%;padding:14px 46px 14px 16px;border-radius:15px;border:1px solid var(--line);background:white;box-shadow:0 5px 18px #1d31510a;outline:none}
+.searchbox span{position:absolute;right:16px;top:13px;font-size:19px}
+.top-actions{display:flex;gap:9px}
+.stats{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 4px 18px #15213d08}.stat b{display:block;font-size:24px;margin-bottom:5px}.stat span{color:var(--muted);font-size:12px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0}
+.filters{display:flex;gap:8px}.filters select{background:white;border:1px solid var(--line);border-radius:11px;padding:9px 12px}
+.drop-mini{border:1.5px dashed #b9c7dc;border-radius:14px;padding:11px 14px;color:#64748b;background:#f9fbff;transition:.2s}.drop-mini.drag{border-color:var(--accent);background:#eef4ff;color:var(--accent)}
+.panel{background:white;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.doc-head,.doc-row{display:grid;grid-template-columns:minmax(260px,2fr) 130px 110px 120px 120px 210px;align-items:center;gap:12px;padding:13px 16px}
+.doc-head{font-size:12px;color:var(--muted);background:#fafcff;border-bottom:1px solid var(--line)}
+.doc-row{border-bottom:1px solid var(--line);transition:.15s}.doc-row:last-child{border-bottom:0}.doc-row:hover{background:#fbfdff}
+.title-wrap{min-width:0}.doc-title{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}.doc-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:5px;direction:auto}
+.badge{display:inline-flex;align-items:center;max-width:100%;padding:5px 8px;border-radius:999px;background:#eef3fb;color:#445571;font-size:11px;white-space:nowrap}
+.ocr-done{background:#e8faf3;color:#087451}.ocr-pending,.ocr-processing{background:#fff5dc;color:#9a6500}.ocr-failed,.ocr-empty{background:#fff0f1;color:#a9222d}
+.actions{display:flex;gap:6px;justify-content:flex-start;flex-wrap:wrap}.iconbtn{border:1px solid var(--line);background:white;padding:7px 9px;border-radius:10px;color:#33425a}.iconbtn:hover{border-color:#b8c7de;background:#f6f9fd}.star{color:#d49a00}
+.empty{padding:70px 20px;text-align:center;color:var(--muted)}.empty .big{font-size:46px;margin-bottom:12px}
+.modal{position:fixed;inset:0;background:#0a1022a8;z-index:50;display:grid;place-items:center;padding:18px;backdrop-filter:blur(5px)}
+.modal-card{background:white;border-radius:22px;width:min(760px,96vw);max-height:92vh;overflow:auto;box-shadow:0 30px 100px #0007}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}.modal-head h3{margin:0}.close{border:0;background:#eef2f7;border-radius:10px;padding:7px 10px}
+.modal-body{padding:20px}
+.upload-zone{border:2px dashed #b9c8dd;border-radius:18px;padding:42px 20px;text-align:center;background:#f9fbff;transition:.2s}.upload-zone.drag{border-color:var(--accent);background:#edf4ff}.upload-zone b{font-size:18px}.upload-zone p{color:var(--muted)}
+.file-list{margin-top:14px}.file-item{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.form-grid label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}.span2{grid-column:1/-1}
+.preview-card{width:min(1200px,98vw);height:min(860px,94vh);overflow:hidden;display:grid;grid-template-columns:1fr 310px;grid-template-rows:auto 1fr}.preview-card .modal-head{grid-column:1/-1}.viewer{background:#222b3d;min-width:0}.viewer iframe{width:100%;height:100%;border:0;background:white}.meta{padding:18px;overflow:auto;border-right:1px solid var(--line)}.meta h3{margin:0 0 5px}.meta small{color:var(--muted)}.meta-block{margin-top:18px}.meta-label{font-size:11px;color:var(--muted);margin-bottom:5px}.suggest{border:1px solid #b8d7ca;background:#effbf6;padding:12px;border-radius:13px;color:#23634d;margin-top:14px}.suggest b{display:block;margin-bottom:5px}
+.toast{position:fixed;left:24px;bottom:24px;background:#111a2f;color:white;padding:12px 15px;border-radius:12px;z-index:90;box-shadow:0 15px 40px #0004;max-width:430px}
+.mobile-menu{display:none}
+@media(max-width:1000px){
+ .shell{grid-template-columns:1fr}.sidebar{display:none;position:fixed;z-index:40;width:250px}.sidebar.open{display:block}.mobile-menu{display:inline-block}
+ .main{padding:16px}.stats{grid-template-columns:repeat(2,1fr)}.doc-head{display:none}.doc-row{grid-template-columns:1fr;gap:9px;padding:16px}.doc-row>div:empty{display:none}.actions{justify-content:flex-start}
+ .preview-card{grid-template-columns:1fr;grid-template-rows:auto 55vh auto;height:94vh}.preview-card .modal-head{grid-column:1}.meta{border-right:0;border-top:1px solid var(--line)}
+}
+@media(max-width:560px){.stats{grid-template-columns:1fr 1fr}.topbar{flex-wrap:wrap}.searchbox{order:3;flex-basis:100%}.form-grid{grid-template-columns:1fr}.span2{grid-column:1}.toolbar{align-items:stretch;flex-direction:column}.filters{display:grid;grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<section id="loginScreen">
+  <div class="login-card">
+    <div class="brandmark">HA</div>
+    <h1>Hossein Archive</h1>
+    <p>آرشیو اسناد شخصی؛ سریع، ساده و قابل جستجو</p>
+    <input id="password" class="field" type="password" placeholder="رمز ورود" autocomplete="current-password">
+    <button class="primary" style="width:100%;margin-top:12px" onclick="login()">ورود به آرشیو</button>
+    <div id="loginError" style="color:#b4232d;font-size:12px;margin-top:10px"></div>
+  </div>
+</section>
+
+<section id="app" class="hidden">
+<div class="shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-brand">
+      <div class="brandmark" style="width:44px;height:44px;border-radius:14px;font-size:16px">HA</div>
+      <div><b>Hossein Archive</b><small>Document Center</small></div>
+    </div>
+    <button class="navbtn active" data-scope="all" onclick="setScope('all',this)"><span>همه اسناد</span><span id="nAll" class="count">0</span></button>
+    <button class="navbtn" data-scope="favorites" onclick="setScope('favorites',this)"><span>علاقه‌مندی‌ها</span><span id="nFav" class="count">0</span></button>
+    <button class="navbtn" data-scope="uncategorized" onclick="setScope('uncategorized',this)"><span>بدون دسته</span><span id="nOther" class="count">0</span></button>
+    <button class="navbtn" data-scope="trash" onclick="setScope('trash',this)"><span>سطل زباله</span><span id="nTrash" class="count">0</span></button>
+    <div style="height:1px;background:#ffffff17;margin:18px 8px"></div>
+    <button class="navbtn" onclick="openUpload()"><span>＋ افزودن سند</span></button>
+    <button class="navbtn" onclick="logout()"><span>خروج</span></button>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="secondary mobile-menu" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+      <div class="searchbox"><span>⌕</span><input id="search" placeholder="جستجو در نام فایل، عنوان، متن OCR و برچسب‌ها…" oninput="debouncedLoad()"></div>
+      <div class="top-actions"><button class="primary" onclick="openUpload()">＋ افزودن سند</button></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b id="sDocs">0</b><span>سند فعال</span></div>
+      <div class="stat"><b id="sFav">0</b><span>علاقه‌مندی</span></div>
+      <div class="stat"><b id="sOther">0</b><span>بدون دسته</span></div>
+      <div class="stat"><b id="sProc">0</b><span>در حال پردازش</span></div>
+      <div class="stat"><b id="sSize">0 MB</b><span>حجم آرشیو</span></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="filters">
+        <select id="category" onchange="loadDocs()"><option value="">همه دسته‌ها</option></select>
+        <select id="sort" onchange="loadDocs()"><option value="newest">جدیدترین</option><option value="oldest">قدیمی‌ترین</option><option value="name">نام</option><option value="size">حجم</option></select>
+      </div>
+      <div id="miniDrop" class="drop-mini">فایل را اینجا رها کنید یا «افزودن سند» را بزنید</div>
+    </div>
+
+    <section class="panel">
+      <div class="doc-head"><div>عنوان</div><div>دسته</div><div>OCR</div><div>حجم</div><div>تاریخ</div><div>عملیات</div></div>
+      <div id="docs"></div>
+    </section>
+  </main>
+</div>
+</section>
+
+<div id="uploadModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h3>افزودن سند</h3><button class="close" onclick="closeModal('uploadModal')">✕</button></div>
+    <div class="modal-body">
+      <div id="uploadZone" class="upload-zone" onclick="document.getElementById('fileInput').click()">
+        <div style="font-size:42px">⇧</div><b>فایل‌ها را اینجا رها کنید</b><p>PDF، JPG، PNG، WEBP یا TIFF — حداکثر 100MB برای هر فایل</p>
+        <button class="primary" type="button">انتخاب فایل</button>
+        <input id="fileInput" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" class="hidden" onchange="uploadFiles(this.files)">
+      </div>
+      <div id="uploadList" class="file-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="editModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h3>ویرایش سند</h3><button class="close" onclick="closeModal('editModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="span2"><label>عنوان</label><input id="eTitle" class="field"></div>
+        <div><label>دسته</label><select id="eCategory" class="field"></select></div>
+        <div><label>برچسب‌ها</label><input id="eTags" class="field" placeholder="مثلاً اتریش، بیمه، مهم"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px"><button class="secondary" onclick="closeModal('editModal')">انصراف</button><button class="primary" onclick="saveEdit()">ذخیره</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="previewModal" class="modal hidden">
+  <div class="modal-card preview-card">
+    <div class="modal-head"><h3 id="pHead">مشاهده سند</h3><button class="close" onclick="closePreview()">✕</button></div>
+    <div class="viewer"><iframe id="viewer"></iframe></div>
+    <aside class="meta">
+      <h3 id="pTitle"></h3><small id="pOriginal"></small>
+      <div id="pSuggest"></div>
+      <div class="meta-block"><div class="meta-label">دسته</div><div id="pCategory"></div></div>
+      <div class="meta-block"><div class="meta-label">وضعیت OCR</div><div id="pOcr"></div></div>
+      <div class="meta-block"><div class="meta-label">برچسب‌ها</div><div id="pTags">—</div></div>
+      <div class="meta-block"><div class="meta-label">منبع</div><div id="pSource"></div></div>
+      <div class="meta-block" style="display:grid;gap:8px">
+        <button class="primary" onclick="shareCurrent()">اشتراک‌گذاری</button>
+        <button class="secondary" onclick="editCurrent()">ویرایش مشخصات</button>
+        <button class="secondary" onclick="downloadCurrent()">دانلود فایل</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+let state={scope:'all',docs:[],categories:[],current:null,timer:null};
+
+async function api(url,opt={}){
+  const r=await fetch(url,opt);
+  if(r.status===401){showLogin();throw new Error('unauthorized')}
+  let data=null;try{data=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(data?.detail||('HTTP '+r.status));
+  return data;
+}
+function showLogin(){document.getElementById('app').classList.add('hidden');document.getElementById('loginScreen').classList.remove('hidden')}
+function showApp(){document.getElementById('loginScreen').classList.add('hidden');document.getElementById('app').classList.remove('hidden')}
+async function login(){
+  const password=document.getElementById('password').value;
+  document.getElementById('loginError').textContent='';
+  try{await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});showApp();await boot()}
+  catch(e){document.getElementById('loginError').textContent='رمز ورود صحیح نیست.'}
+}
+async function logout(){await fetch('/api/logout',{method:'POST'});showLogin()}
+document.getElementById('password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+
+function fmtSize(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB'}
+function fmtDate(s){try{return new Intl.DateTimeFormat('fa-IR',{year:'numeric',month:'short',day:'numeric'}).format(new Date(s))}catch(e){return s}}
+function catName(id){return state.categories.find(x=>x.id===id)?.name||id||'بدون دسته'}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2600)}
+function closeModal(id){document.getElementById(id).classList.add('hidden')}
+
+async function boot(){
+  const c=await api('/api/categories');state.categories=c.items;
+  const selects=[document.getElementById('category'),document.getElementById('eCategory')];
+  selects.forEach((s,i)=>{if(i===1)s.innerHTML='';state.categories.forEach(x=>s.insertAdjacentHTML('beforeend',`<option value="${x.id}">${esc(x.name)}</option>`))});
+  await refreshAll();
+}
+async function refreshAll(){await Promise.all([loadStats(),loadDocs()])}
+async function loadStats(){
+  const s=await api('/api/stats');
+  document.getElementById('sDocs').textContent=s.documents;document.getElementById('sFav').textContent=s.favorites;document.getElementById('sOther').textContent=s.uncategorized;document.getElementById('sProc').textContent=s.processing;document.getElementById('sSize').textContent=fmtSize(s.storage);
+  document.getElementById('nAll').textContent=s.documents;document.getElementById('nFav').textContent=s.favorites;document.getElementById('nOther').textContent=s.uncategorized;document.getElementById('nTrash').textContent=s.trash;
+}
+async function loadDocs(){
+  const q=document.getElementById('search').value.trim(),category=document.getElementById('category').value,sort=document.getElementById('sort').value;
+  const u=new URL('/api/documents',location.origin);u.searchParams.set('scope',state.scope);u.searchParams.set('sort',sort);if(q)u.searchParams.set('q',q);if(category)u.searchParams.set('category',category);
+  const data=await api(u);state.docs=data.items;renderDocs();
+}
+function debouncedLoad(){clearTimeout(state.timer);state.timer=setTimeout(loadDocs,280)}
+function setScope(scope,btn){state.scope=scope;document.querySelectorAll('.navbtn[data-scope]').forEach(x=>x.classList.remove('active'));btn.classList.add('active');loadDocs()}
+function ocrBadge(s){const names={done:'آماده',pending:'در صف',processing:'در حال OCR',failed:'خطا',empty:'بدون متن'};return `<span class="badge ocr-${esc(s)}">${names[s]||s}</span>`}
+function renderDocs(){
+  const box=document.getElementById('docs');
+  if(!state.docs.length){box.innerHTML='<div class="empty"><div class="big">⌕</div><b>سندی پیدا نشد</b><div style="margin-top:7px">فایل جدید اضافه کنید یا عبارت جستجو را تغییر دهید.</div></div>';return}
+  box.innerHTML=state.docs.map(d=>{
+    const trash=state.scope==='trash';
+    return `<div class="doc-row">
+      <div class="title-wrap"><div class="doc-title" onclick="openDoc('${d.id}')">${esc(d.title)}</div><div class="doc-sub">${esc(d.original_name)} · ${esc(d.source==='google_drive'?'Google Drive':'آپلود مستقیم')}</div></div>
+      <div><span class="badge">${esc(catName(d.category))}</span></div>
+      <div>${ocrBadge(d.ocr_status)}</div><div>${fmtSize(d.size)}</div><div>${fmtDate(d.created_at)}</div>
+      <div class="actions">
+        ${trash?`<button class="success" onclick="restoreDoc('${d.id}')">بازیابی</button><button class="danger" onclick="permanentDelete('${d.id}')">حذف قطعی</button>`:
+        `<button class="iconbtn" onclick="openDoc('${d.id}')">مشاهده</button><button class="iconbtn" onclick="shareDoc('${d.id}')">اشتراک</button><button class="iconbtn ${d.favorite?'star':''}" onclick="toggleFav('${d.id}',${d.favorite?0:1})">★</button><button class="danger" onclick="trashDoc('${d.id}')">حذف</button>`}
+      </div></div>`
+  }).join('');
+}
+async function openDoc(id){
+  const d=await api('/api/documents/'+id);state.current=d;
+  document.getElementById('pHead').textContent='مشاهده سند';document.getElementById('pTitle').textContent=d.title;document.getElementById('pOriginal').textContent=d.original_name;
+  document.getElementById('pCategory').textContent=catName(d.category);document.getElementById('pOcr').innerHTML=ocrBadge(d.ocr_status);document.getElementById('pTags').textContent=d.tags||'—';document.getElementById('pSource').textContent=d.source==='google_drive'?'Google Drive':'آپلود مستقیم';
+  const sug=document.getElementById('pSuggest');
+  if(d.suggested_title && d.suggested_title!==d.title){sug.innerHTML=`<div class="suggest"><b>پیشنهاد هوشمند</b><div>${esc(d.suggested_title)}</div><button class="success" style="margin-top:8px" onclick="applySuggestion()">اعمال این عنوان</button></div>`}else{sug.innerHTML=''}
+  document.getElementById('viewer').src='/api/documents/'+id+'/file';
+  document.getElementById('previewModal').classList.remove('hidden');
+}
+function closePreview(){document.getElementById('viewer').src='about:blank';closeModal('previewModal')}
+async function applySuggestion(){if(!state.current)return;await api('/api/documents/'+state.current.id+'/apply-suggestion',{method:'POST'});toast('عنوان پیشنهادی اعمال شد');closePreview();refreshAll()}
+function editCurrent(){if(state.current){closePreview();openEdit(state.current)}}
+function openEdit(d){state.current=d;document.getElementById('eTitle').value=d.title||'';document.getElementById('eCategory').value=d.category||'other';document.getElementById('eTags').value=d.tags||'';document.getElementById('editModal').classList.remove('hidden')}
+async function saveEdit(){
+  const d=state.current;if(!d)return;
+  await api('/api/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:document.getElementById('eTitle').value.trim(),category:document.getElementById('eCategory').value,tags:document.getElementById('eTags').value.trim()})});
+  closeModal('editModal');toast('ذخیره شد');refreshAll();
+}
+async function toggleFav(id,v){await api('/api/documents/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({favorite:!!v})});refreshAll()}
+async function trashDoc(id){if(!confirm('این سند به سطل زباله منتقل شود؟'))return;await api('/api/documents/'+id,{method:'DELETE'});refreshAll()}
+async function restoreDoc(id){await api('/api/documents/'+id+'/restore',{method:'POST'});refreshAll()}
+async function permanentDelete(id){if(!confirm('حذف قطعی است و قابل بازیابی نیست. ادامه می‌دهید؟'))return;await api('/api/documents/'+id+'/permanent',{method:'DELETE'});refreshAll()}
+function downloadCurrent(){if(state.current)location.href='/api/documents/'+state.current.id+'/file?download=1'}
+function shareCurrent(){if(state.current)shareDoc(state.current.id)}
+async function shareDoc(id){
+  const days=prompt('لینک چند روز معتبر باشد؟','7');if(days===null)return;
+  try{const x=await api('/api/documents/'+id+'/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:Number(days)||7})});const url=location.origin+x.url;await navigator.clipboard.writeText(url);toast('لینک اشتراک کپی شد')}
+  catch(e){toast('ساخت لینک ناموفق بود')}
+}
+
+function openUpload(){document.getElementById('uploadModal').classList.remove('hidden')}
+async function uploadFiles(files){
+  if(!files||!files.length)return;
+  const list=document.getElementById('uploadList');list.innerHTML='';
+  const fd=new FormData();[...files].forEach(f=>{fd.append('files',f);list.insertAdjacentHTML('beforeend',`<div class="file-item"><span>${esc(f.name)}</span><span>${fmtSize(f.size)}</span></div>`)});
+  try{
+    const r=await fetch('/api/documents/upload',{method:'POST',body:fd});if(r.status===401){showLogin();return}const data=await r.json();if(!r.ok)throw new Error(data.detail||'upload failed');
+    toast('فایل‌ها وارد صف آرشیو شدند');document.getElementById('fileInput').value='';setTimeout(()=>{closeModal('uploadModal');refreshAll()},500);
+  }catch(e){toast('خطا در آپلود: '+e.message)}
+}
+function wireDrop(el,global=false){
+  ['dragenter','dragover'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.add('drag')}));
+  ['dragleave','drop'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.remove('drag')}));
+  el.addEventListener('drop',e=>{const f=e.dataTransfer.files;if(f?.length){if(global)openUpload();uploadFiles(f)}});
+}
+wireDrop(document.getElementById('uploadZone'));wireDrop(document.getElementById('miniDrop'),true);
+
+(async()=>{try{await api('/api/me');showApp();await boot()}catch(e){showLogin()}})();
+setInterval(()=>{if(!document.getElementById('app').classList.contains('hidden'))loadStats().catch(()=>{})},10000);
+</script>
+</body>
+</html>
