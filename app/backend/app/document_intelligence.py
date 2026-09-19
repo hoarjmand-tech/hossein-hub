@@ -233,9 +233,21 @@ def classify(text,filename=""):
  title=re.sub(r"\s+"," ",title).strip(" .-_")[:180]
  if not title:title="سند"
 
+ # Reject OCR-generated gibberish as a title. Mixed-script tokens are a strong signal
+ # of bad OCR on Persian scans.
+ tokens=re.findall(r"[A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF0-9._\-/]*",title)
+ mixed=sum(1 for w in tokens if re.search(r"[A-Za-z].*[\u0600-\u06FF]|[\u0600-\u06FF].*[A-Za-z]",w))
+ alpha=sum(c.isalpha() for c in title)
+ sane=alpha>=4 and mixed<=max(1,len(tokens)//10)
+ if not sane:
+  fallback=useful_source_title(original)
+  title=fallback or "سند اسکن‌شده"
+  cat=sub="other"
+  score=0
+
  if score>=14:confidence="high"
- elif score>=8:confidence="medium"
- elif heading or subj:confidence="medium"
+ elif score>=8 and sane:confidence="medium"
+ elif (heading or subj) and sane:confidence="medium"
  else:confidence="low"
 
  return {
