@@ -27,8 +27,9 @@ from .netops_config import r as netops_config_router
 from .automation_api import r as automation_router
 from .netops_library import r as netops_library_router
 from .topology import r as topology_router
+from .document_intake_api import r as document_intake_router
 Base.metadata.create_all(engine)
-app=FastAPI(title="Hossein Hub",version="2.1.0")
+app=FastAPI(title="Hossein Hub",version="2.2.0")
 app.include_router(auth_router)
 app.include_router(archive_router)
 app.include_router(extras_router)
@@ -52,6 +53,7 @@ app.include_router(netops_config_router)
 app.include_router(automation_router)
 app.include_router(netops_library_router)
 app.include_router(topology_router)
+app.include_router(document_intake_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
@@ -102,6 +104,8 @@ def topology_home(): return FileResponse(WEB/"topology.html",headers=NO_CACHE)
 def command_center_home(): return FileResponse(WEB/"command_center.html",headers=NO_CACHE)
 @app.get("/audit",include_in_schema=False)
 def audit_home(): return FileResponse(WEB/"audit.html",headers=NO_CACHE)
+@app.get("/intake",include_in_schema=False)
+def intake_home(): return FileResponse(WEB/"intake.html",headers=NO_CACHE)
 @app.get("/archive",include_in_schema=False)
 def archive_home(): return FileResponse(WEB/"index.html",headers=NO_CACHE)
 @app.get("/manifest.json",include_in_schema=False)
@@ -111,4 +115,4 @@ def sw(): return FileResponse(WEB/"sw.js",media_type="application/javascript",he
 @app.get("/health")
 def health():
  with engine.connect() as c:c.execute(text("select 1"))
- return {"status":"ok","database":"ok","module":"hub","version":"2.1.0"}
+ return {"status":"ok","database":"ok","module":"hub","version":"2.2.0"}
