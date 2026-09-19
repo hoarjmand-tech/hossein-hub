@@ -1,6 +1,6 @@
 import os,uuid,shutil,json
 from pathlib import Path
-from fastapi import APIRouter,Depends,HTTPException,UploadFile,File,Query
+from fastapi import APIRouter,Depends,HTTPException,UploadFile,File,Query,Form
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .core import get_db,ARCHIVE_ROOT,MAX_UPLOAD
@@ -110,3 +110,28 @@ def review(limit:int=100,db:Session=Depends(get_db)):
   d=db.get(Document,x.document_id) if x.document_id else None
   out.append({"intake_id":x.id,"document_id":x.document_id,"original_name":x.original_name,"confidence":meta.get("confidence"),"canonical_filename":meta.get("canonical_filename"),"document":None if not d else {"title":d.title,"category":d.category,"subtype":d.subtype,"country":d.country,"issuer":d.issuer,"document_number":d.document_number,"issue_date":d.issue_date,"expiry_date":d.expiry_date,"person_id":d.person_id,"case_id":d.case_id}})
  return out
+
+
+@r.post("/bulk-reclassify",dependencies=[Depends(csrf_guard)])
+def bulk_reclassify(db:Session=Depends(get_db)):
+ from .services import extract_text
+ rows=list(db.scalars(select(Document).where(Document.deleted==False)))
+ done=0
+ for d in rows:
+  v=db.scalar(select(DocumentVersion).where(DocumentVersion.document_id==d.id).order_by(DocumentVersion.version.desc()))
+  if not v: continue
+  p=ARCHIVE_ROOT/"documents"/v.stored_name
+  text=extract_text(p,v.mime_type) if p.exists() else (v.ocr_text or "")
+  if text: v.ocr_text=text;v.ocr_status="done"
+  meta=classify(text or "",v.original_name or "")
+  ext=Path(v.original_name or "").suffix
+  canonical=canonical_filename(meta,ext)
+  d.title=meta["title"];d.category=meta["category"];d.subtype=meta["subtype"];d.country=meta["country"];d.issuer=meta["issuer"];d.document_number=meta["document_number"];d.issue_date=meta["issue_date"];d.expiry_date=meta["expiry_date"]
+  v.original_name=canonical
+  item=db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.document_id==d.id).order_by(DocumentIntakeItem.first_seen.desc()))
+  if item:
+   item.detected_title=meta["title"];item.detected_category=meta["category"];item.detected_subtype=meta["subtype"];item.detected_country=meta["country"];item.detected_issuer=meta["issuer"];item.detected_number=meta["document_number"];item.detected_issue_date=meta["issue_date"];item.detected_expiry_date=meta["expiry_date"]
+   old=json.loads(item.extracted_json or "{}");old.update({"confidence":meta["confidence"],"canonical_filename":canonical,"person_name":meta.get("person_name"),"reprocessed":True});item.extracted_json=json.dumps(old,ensure_ascii=False)
+  done+=1
+ db.add(Audit(action="document.intake.bulk_reclassify",object_type="document",object_id=None,detail=str(done)));db.commit()
+ return {"ok":True,"processed":done}
