@@ -262,18 +262,20 @@ services:
     restart: unless-stopped
     secrets: [rclone_config_pass]
     entrypoint: ["/bin/sh","-c"]
-    command: >
-      export RCLONE_CONFIG_PASS="$(cat /run/secrets/rclone_config_pass)";
-      while true; do
-        rclone copy hossein-drive: /archive/drive-inbox
-        --config /config/rclone/rclone.conf
-        --drive-root-folder-id 1aDh5o-paAS7HwFRnKBo2EUHYXe-LV8PP
-        --drive-skip-gdocs
-        --include "*.pdf" --include "*.PDF"
-        --include "*.jpg" --include "*.jpeg" --include "*.png" --include "*.webp" --include "*.tif" --include "*.tiff"
-        --ignore-existing --no-traverse --log-level INFO || true;
-        sleep 15;
-      done
+    command:
+      - |
+        RCLONE_CONFIG_PASS="$(cat /run/secrets/rclone_config_pass)"
+        export RCLONE_CONFIG_PASS
+        while true; do
+          rclone copy hossein-drive: /archive/drive-inbox \
+            --config /config/rclone/rclone.conf \
+            --drive-root-folder-id 1aDh5o-paAS7HwFRnKBo2EUHYXe-LV8PP \
+            --drive-skip-gdocs \
+            --include "*.pdf" --include "*.PDF" \
+            --include "*.jpg" --include "*.jpeg" --include "*.png" --include "*.webp" --include "*.tif" --include "*.tiff" \
+            --ignore-existing --no-traverse --log-level INFO
+          sleep 15
+        done
     volumes:
       - ./archive:/archive
       - ./secrets/rclone:/config/rclone:ro
