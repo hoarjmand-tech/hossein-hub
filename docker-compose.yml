@@ -91,6 +91,8 @@ services:
     depends_on:
       archive-api:
         condition: service_healthy
+      ollama:
+        condition: service_started
     volumes:
       - ./archive:/archive
     networks: [hub-backend]
