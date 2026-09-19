@@ -12,12 +12,11 @@ PREV=ARCHIVE_ROOT/"previews"
 SOURCES=[
  ("local",ARCHIVE_ROOT/"intake"),
  ("google_drive",ARCHIVE_ROOT/"drive-inbox"),
- ("windows_i",Path("/local-inbox")),
 ]
 ALLOWED={"application/pdf","image/jpeg","image/png","image/webp","image/tiff"}
 
 for source,p in SOURCES:
- if source!="windows_i":p.mkdir(parents=True,exist_ok=True)
+ p.mkdir(parents=True,exist_ok=True)
 
 def sha256(p):
  h=hashlib.sha256()
@@ -55,13 +54,13 @@ def handle(db,source,p):
   db.add(DocumentIntakeItem(source=source,source_key=str(p),original_name=p.name,sha256=sh,status="duplicate",document_id=prior.document_id,processed_at=datetime.utcnow()))
   db.add(Audit(action="document.intake.duplicate_ignored",object_type="document",object_id=prior.document_id,detail=f"{source}:{p.name}"))
   db.commit()
-  if source not in ("google_drive","windows_i"):p.unlink(missing_ok=True)
+  if source!="google_drive":p.unlink(missing_ok=True)
   return
 
  existing=db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.sha256==sh,DocumentIntakeItem.status=="imported"))
  if existing:
   st.duplicates_ignored+=1;db.commit()
-  if source not in ("google_drive","windows_i"):p.unlink(missing_ok=True)
+  if source!="google_drive":p.unlink(missing_ok=True)
   return
 
  text=""
@@ -80,7 +79,7 @@ def handle(db,source,p):
  db.add(d);db.flush()
  stored=f"{d.id}/v1-{uuid.uuid4()}{ext}"
  dest=DOCS/stored;dest.parent.mkdir(parents=True,exist_ok=True)
- if source in ("google_drive","windows_i"):
+ if source=="google_drive":
   try:os.link(p,dest)
   except Exception:shutil.copy2(str(p),str(dest))
  else:
