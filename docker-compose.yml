@@ -52,6 +52,26 @@ services:
       timeout: 5s
       retries: 5
     networks: [hub-backend]
+  document-intake-worker:
+    build: ./app/backend
+    container_name: hossein-hub-document-intake
+    restart: unless-stopped
+    command: ["python","-m","app.document_intake_worker"]
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      ARCHIVE_ROOT: /archive
+      DOCUMENT_INTAKE_INTERVAL: "60"
+    secrets: [postgres_password]
+    depends_on:
+      archive-api:
+        condition: service_healthy
+    volumes:
+      - ./archive:/archive
+    networks: [hub-backend]
+
   ocr-worker:
     build: ./app/backend
     container_name: hossein-hub-ocr
@@ -213,6 +233,28 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks: [hub-backend]
+
+  drive-sync:
+    image: rclone/rclone:1.70.3
+    container_name: hossein-hub-drive-sync
+    restart: unless-stopped
+    profiles: ["drive"]
+    entrypoint: ["/bin/sh","-c"]
+    command: >
+      while true; do
+        rclone copy hossein-drive: /archive/drive-inbox
+        --config /config/rclone/rclone.conf
+        --drive-root-folder-id 1aDh5o-paAS7HwFRnKBo2EUHYXe-LV8PP
+        --drive-skip-gdocs
+        --include "*.pdf" --include "*.PDF"
+        --include "*.jpg" --include "*.jpeg" --include "*.png" --include "*.webp" --include "*.tif" --include "*.tiff"
+        --ignore-existing --no-traverse --log-level INFO || true;
+        sleep 300;
+      done
+    volumes:
+      - ./archive:/archive
+      - ./secrets/rclone:/config/rclone:ro
     networks: [hub-backend]
 
   nginx:
