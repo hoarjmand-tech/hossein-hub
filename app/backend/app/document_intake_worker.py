@@ -99,7 +99,7 @@ def handle(db,source,p):
   source=source,source_key=str(p),original_name=p.name,sha256=sh,status="imported",document_id=d.id,
   detected_title=meta["title"],detected_category=meta["category"],detected_subtype=meta["subtype"],detected_country=meta["country"],
   detected_issuer=meta["issuer"],detected_number=meta["document_number"],detected_issue_date=meta["issue_date"],detected_expiry_date=meta["expiry_date"],
-  extracted_json=json.dumps({"confidence":meta["confidence"],"canonical_filename":canonical},ensure_ascii=False),
+  extracted_json=json.dumps({"confidence":meta["confidence"],"canonical_filename":canonical,"drive_file_id":(p.name.split("__",2)[1] if source=="google_drive" and p.name.startswith("gdrive__") and "__" in p.name else None)},ensure_ascii=False),
   processed_at=datetime.utcnow()
  )
  db.add(item);st.items_imported+=1;st.last_success_at=datetime.utcnow()
