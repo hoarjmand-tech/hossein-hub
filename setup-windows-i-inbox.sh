@@ -5,8 +5,13 @@ ROOT=/opt/hossein-hub
 MOUNT=/mnt/hossein-inbox
 CREDS="$ROOT/secrets/windows-inbox.credentials"
 
-sudo apt-get update
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y cifs-utils
+if command -v mount.cifs >/dev/null 2>&1; then
+  echo "cifs-utils already installed."
+else
+  echo "cifs-utils is missing; attempting install..."
+  sudo apt-get update
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y cifs-utils
+fi
 
 read -rp "Windows PC IP: " WIN_IP
 read -rp "Windows username: " WIN_USER
