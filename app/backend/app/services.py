@@ -11,10 +11,10 @@ def extract_text(path:Path,mime:str|None):
     subprocess.run(["pdftoppm","-f","1","-l","10","-jpeg","-r","180",str(path),f"{td}/p"],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     out=[]
     for p in sorted(Path(td).glob("p-*.jpg")):
-     out.append(subprocess.check_output(["tesseract",str(p),"stdout","-l","fas+eng"],stderr=subprocess.DEVNULL,text=True))
+     out.append(subprocess.check_output(["tesseract",str(p),"stdout","-l","fas+eng+deu"],stderr=subprocess.DEVNULL,text=True))
     return "\n".join(out)
   if mime and mime.startswith("image/"):
-   return subprocess.check_output(["tesseract",str(path),"stdout","-l","fas+eng"],stderr=subprocess.DEVNULL,text=True)
+   return subprocess.check_output(["tesseract",str(path),"stdout","-l","fas+eng+deu"],stderr=subprocess.DEVNULL,text=True)
  except Exception as e: return ""
  return ""
 def thumbnail(path:Path,mime:str|None,out:Path):
