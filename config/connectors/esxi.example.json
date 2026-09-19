@@ -1,5 +1,0 @@
-{
-  "host": "ESXI_OR_VCENTER_IP",
-  "port": 443,
-  "verify_tls": false
-}
