@@ -48,21 +48,4 @@ def upload(
 def rename_jobs(x_drive_token: str = Header(..., alias="X-Drive-Token")):
     if not TOKEN or not hmac.compare_digest(x_drive_token, TOKEN):
         raise HTTPException(401, "Unauthorized")
-    from sqlalchemy import select
-    from .core import SessionLocal
-    from .models import DocumentIntakeItem, DocumentVersion
-    import json
-    jobs=[]
-    with SessionLocal() as db:
-        rows=db.scalars(select(DocumentIntakeItem).where(DocumentIntakeItem.source=="google_drive",DocumentIntakeItem.status=="imported").order_by(DocumentIntakeItem.processed_at.desc()).limit(500))
-        for item in rows:
-            try: meta=json.loads(item.extracted_json or "{}")
-            except Exception: meta={}
-            fid=meta.get("drive_file_id")
-            if not fid or not item.document_id: continue
-            v=db.scalar(select(DocumentVersion).where(DocumentVersion.document_id==item.document_id).order_by(DocumentVersion.version.desc()))
-            confidence=str(meta.get("confidence") or "").lower()
-            # Never rename a Drive file unless the archive classified it with high confidence.
-            if confidence=="high" and v and v.original_name and not v.original_name.lower().startswith("document."):
-                jobs.append({"fileId":fid,"name":v.original_name,"documentId":item.document_id})
-    return {"jobs":jobs}
+    return {"jobs":[], "mode":"safe-import", "message":"Automatic Drive renaming is disabled."}
