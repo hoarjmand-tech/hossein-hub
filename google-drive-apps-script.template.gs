@@ -44,3 +44,20 @@ function installHosseinHubTrigger() {
   ScriptApp.newTrigger("syncHosseinHub").timeBased().everyMinutes(5).create();
   syncHosseinHub();
 }
+
+
+function applyHosseinHubRenames() {
+  const props = PropertiesService.getScriptProperties();
+  const raw = props.getProperty("renameQueue") || "[]";
+  const jobs = JSON.parse(raw);
+  const left = [];
+  jobs.forEach(j => {
+    try {
+      if (!j.fileId || !j.name) return;
+      DriveApp.getFileById(j.fileId).setName(j.name);
+    } catch (e) {
+      left.push(j);
+    }
+  });
+  props.setProperty("renameQueue", JSON.stringify(left));
+}
