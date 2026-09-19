@@ -12,7 +12,6 @@ argon2-cffi==25.1.0
 
 requests[socks]>=2.32,<3
 
-pytest>=8,<9
 
 pyvmomi>=8.0.3,<9
 
