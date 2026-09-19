@@ -61,6 +61,8 @@ def rename_jobs(x_drive_token: str = Header(..., alias="X-Drive-Token")):
             fid=meta.get("drive_file_id")
             if not fid or not item.document_id: continue
             v=db.scalar(select(DocumentVersion).where(DocumentVersion.document_id==item.document_id).order_by(DocumentVersion.version.desc()))
-            if v and v.original_name and not v.original_name.lower().startswith("document."):
+            confidence=str(meta.get("confidence") or "").lower()
+            # Never rename a Drive file unless the archive classified it with high confidence.
+            if confidence=="high" and v and v.original_name and not v.original_name.lower().startswith("document."):
                 jobs.append({"fileId":fid,"name":v.original_name,"documentId":item.document_id})
     return {"jobs":jobs}
