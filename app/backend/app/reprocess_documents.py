@@ -1,0 +1,39 @@
+import json, os
+from pathlib import Path
+from sqlalchemy import select
+from .core import SessionLocal, ARCHIVE_ROOT
+from .models import Document, DocumentVersion, DocumentIntakeItem, Audit
+from .services import extract_text
+from .document_intelligence import classify, canonical_filename
+
+DOCS=ARCHIVE_ROOT/"documents"
+
+def process(db,d,v):
+ p=DOCS/v.stored_name
+ if not p.exists(): return False
+ text=extract_text(p,v.mime_type) or v.ocr_text or ""
+ meta=classify(text,v.original_name or "")
+ ext=p.suffix.lower()[:15]
+ canonical=canonical_filename(meta,ext)
+ v.ocr_text=text or None
+ v.ocr_status="done" if text else "pending"
+ v.original_name=canonical
+ d.title=meta["title"];d.category=meta["category"];d.subtype=meta["subtype"]
+ d.country=meta["country"];d.issuer=meta["issuer"];d.document_number=meta["document_number"]
+ d.issue_date=meta["issue_date"];d.expiry_date=meta["expiry_date"]
+ item=db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.document_id==d.id).order_by(DocumentIntakeItem.first_seen.desc()))
+ if item:
+  item.detected_title=meta["title"];item.detected_category=meta["category"];item.detected_subtype=meta["subtype"]
+  item.detected_country=meta["country"];item.detected_issuer=meta["issuer"];item.detected_number=meta["document_number"]
+  item.detected_issue_date=meta["issue_date"];item.detected_expiry_date=meta["expiry_date"]
+  item.extracted_json=json.dumps({"confidence":meta["confidence"],"canonical_filename":canonical,"reprocessed":True},ensure_ascii=False)
+ db.add(Audit(action="document.intake.reprocess",object_type="document",object_id=d.id,detail=canonical))
+ return True
+
+with SessionLocal() as db:
+ n=0
+ for d in db.scalars(select(Document).where(Document.deleted==False)):
+  v=db.scalar(select(DocumentVersion).where(DocumentVersion.document_id==d.id).order_by(DocumentVersion.version.desc()))
+  if v and process(db,d,v):
+   db.commit();n+=1;print(f"REPROCESSED {n}: {v.original_name}",flush=True)
+ print(f"REPROCESS COMPLETE: {n}",flush=True)
