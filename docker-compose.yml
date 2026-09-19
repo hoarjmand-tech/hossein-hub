@@ -84,7 +84,9 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       HUB_API_KEY_FILE: /run/secrets/hub_api_key
       ARCHIVE_ROOT: /archive
-      DOCUMENT_INTAKE_INTERVAL: "60"\n      OLLAMA_URL: http://ollama:11434\n      DOCUMENT_AI_MODEL: qwen2.5:3b
+      DOCUMENT_INTAKE_INTERVAL: "60"
+      OLLAMA_URL: http://ollama:11434
+      DOCUMENT_AI_MODEL: qwen2.5:3b
     secrets: [postgres_password,hub_api_key]
     depends_on:
       archive-api:
