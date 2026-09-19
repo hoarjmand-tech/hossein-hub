@@ -9,8 +9,8 @@ if command -v mount.cifs >/dev/null 2>&1; then
   echo "cifs-utils already installed."
 else
   echo "cifs-utils is missing; attempting install..."
-  sudo apt-get update
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y cifs-utils
+  sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list -o Dir::Etc::sourceparts=- update
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list -o Dir::Etc::sourceparts=- install -y cifs-utils
 fi
 
 read -rp "Windows PC IP: " WIN_IP
