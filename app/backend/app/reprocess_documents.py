@@ -19,6 +19,9 @@ def process(db,d,v):
  canonical=canonical_filename(meta,ext)
  v.ocr_text=text or None
  v.ocr_status="done" if text else "pending"
+ # Never degrade a useful filename to generic Document.*
+ if meta.get("subtype")=="other" and canonical.lower().startswith("document."):
+  canonical=v.original_name or canonical
  v.original_name=canonical
  d.title=meta["title"];d.category=meta["category"];d.subtype=meta["subtype"]
  d.country=meta["country"];d.issuer=meta["issuer"];d.document_number=meta["document_number"]
