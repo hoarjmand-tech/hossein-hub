@@ -6,7 +6,7 @@ from .core import ARCHIVE_ROOT, MAX_UPLOAD, secret
 r = APIRouter(prefix="/api/google-drive-push")
 
 TOKEN = secret(os.getenv("DRIVE_PUSH_TOKEN_FILE","/run/secrets/drive_push_token"))
-INBOX = ARCHIVE_ROOT / "intake"
+INBOX = ARCHIVE_ROOT / "drive-inbox"
 INBOX.mkdir(parents=True, exist_ok=True)
 
 @r.post("/upload")
