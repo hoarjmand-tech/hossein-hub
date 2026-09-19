@@ -73,6 +73,20 @@ def document_number(text,subtype):
   if m:return m.group(1).upper()
  return None
 
+def person_name(text):
+ t=norm(text)
+ patterns=[
+  r"(?:surname|last name|نام خانوادگی)[:\\s]+([a-zآ-ی][a-zآ-ی \\-]{2,40})",
+  r"(?:given names?|first name|نام)[:\\s]+([a-zآ-ی][a-zآ-ی \\-]{2,40})",
+ ]
+ vals=[]
+ for p in patterns:
+  m=re.search(p,t,re.I)
+  if m:
+   v=" ".join(m.group(1).split())[:60]
+   if v and v not in vals: vals.append(v)
+ return " ".join(vals[:2]) or None
+
 def classify(text,filename=""):
  t=norm((text or "")+" "+(filename or ""))
  best=("other","other",0)
@@ -88,6 +102,7 @@ def classify(text,filename=""):
   if any(k in t for k in keys):issuer=name;break
  ds=dates(t)
  number=document_number(t,sub)
+ person=person_name(t)
  issue=ds[0] if ds else None
  expiry=ds[-1] if len(ds)>1 else None
  label={
@@ -98,13 +113,14 @@ def classify(text,filename=""):
   "court":"Court Document","authority_letter":"Authority Letter","tax":"Tax Document","invoice":"Invoice","contract":"Contract",
  }.get(sub,"Document")
  parts=[label]
+ if person:parts.append(person.title())
  if issuer:parts.append(issuer)
  if number:parts.append(number)
  if expiry:parts.append("exp-"+expiry.isoformat())
  title=" - ".join(parts)
  return {
   "title":title,"category":cat,"subtype":sub,"country":country,"issuer":issuer,
-  "document_number":number,"issue_date":issue,"expiry_date":expiry,
+  "document_number":number,"issue_date":issue,"expiry_date":expiry,"person_name":person,
   "confidence":"high" if best[2]>=4 else ("medium" if best[2]>=2 else "low")
  }
 
