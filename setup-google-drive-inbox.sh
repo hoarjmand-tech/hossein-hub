@@ -9,7 +9,7 @@ sudo mkdir -p "$DIR"
 sudo chown -R "$(id -un)":"$(id -gn)" "$DIR"
 chmod 700 "$DIR"
 
-echo "Google Drive one-time authorization"
+echo "Google Drive one-time authorization\nTarget folder: Hossein Hub Inbox"
 echo "Remote name must be: hossein-drive"
 echo "When asked for storage type choose: Google Drive"
 echo "Use your normal Google account OAuth login."
