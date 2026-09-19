@@ -3,25 +3,24 @@ from datetime import datetime,date
 from pathlib import Path
 
 RULES=[
- ("identity","passport",["passport","reisepass","گذرنامه","پاسپورت"]),
- ("identity","residence_permit",["aufenthaltstitel","residence permit","niederlassungsbewilligung","اقامت"]),
- ("identity","id_card",["identity card","personalausweis","carta d'identità","کارت ملی","national id"]),
- ("identity","driving_license",["driving licence","driver license","führerschein","گواهینامه"]),
- ("insurance","health_insurance",["ögk","krankenversicherung","health insurance","بیمه درمان"]),
+ ("identity","passport",["passport","reisepass","passeport","islamic republic of iran","گذرنامه","پاسپورت"]),
+ ("identity","residence_permit",["aufenthaltstitel","residence permit","niederlassungsbewilligung","aufenthaltskarte","rot-weiß-rot","اقامت"]),
+ ("identity","id_card",["identity card","personalausweis","carta d'identità","codice fiscale","کارت ملی","national id"]),
+ ("identity","driving_license",["driving licence","driving license","driver license","führerschein","گواهینامه"]),
+ ("education","university",["university","universität","hochschule","universita","laurea","degree","diploma","transcript","دانشگاه","دانشنامه","ریز نمرات","enrollment","immatrikulation"]),
+ ("legal","authority_letter",["ma35","magistratsabteilung","magistrat der stadt wien","behörde","bescheid","beschwerde","vollmacht","authority","amt","اداره"]),
+ ("housing","rental_contract",["mietvertrag","rental agreement","lease agreement","hauptmietvertrag","اجاره نامه","قرارداد اجاره"]),
+ ("insurance","health_insurance",["ögk","österreichische gesundheitskasse","krankenversicherung","health insurance","بیمه درمان"]),
  ("insurance","legal_insurance",["arag","rechtsschutz","legal insurance","بیمه حقوقی"]),
  ("insurance","life_insurance",["lebensversicherung","life insurance","بیمه عمر"]),
- ("housing","rental_contract",["mietvertrag","rental agreement","lease agreement","اجاره نامه","قرارداد اجاره"]),
- ("finance","bank_statement",["kontoauszug","bank statement","account statement","صورت حساب بانکی"]),
+ ("finance","bank_statement",["kontoauszug","bank statement","account statement","iban","bic","صورت حساب بانکی"]),
  ("finance","bank_letter",["mittelherkunft","bank confirmation","bank letter","bankbestätigung"]),
- ("employment","employment_contract",["arbeitsvertrag","employment contract","قرارداد کار"]),
- ("employment","salary",["gehaltsabrechnung","salary slip","payslip","فیش حقوق"]),
- ("education","university",["university","universität","hochschule","دانشگاه","enrollment","immatrikulation"]),
- ("legal","court",["gericht","court","دادگاه","beschluss","urteil"]),
- ("legal","authority_letter",["ma35","magistrat","behörde","authority","amt","اداره"]),
- ("tax","tax",["finanzamt","tax","steuer","مالیات"]),
- ("invoice","invoice",["invoice","rechnung","فاکتور"]),
+ ("employment","employment_contract",["arbeitsvertrag","dienstvertrag","employment contract","قرارداد کار"]),
+ ("employment","salary",["gehaltsabrechnung","lohnabrechnung","salary slip","payslip","فیش حقوق"]),
+ ("tax","tax",["finanzamt","steuer","tax office","مالیات"]),
+ ("invoice","invoice",["invoice","rechnung","faktura","فاکتور"]),
  ("contract","contract",["vertrag","agreement","contract","قرارداد"]),
-]
+ ("legal","court",["gericht","court","دادگاه","beschluss","urteil"]),
 
 COUNTRIES={
  "austria":["austria","österreich","اتریش"],
@@ -115,7 +114,7 @@ def classify(text,filename=""):
 
  best=("other","other",0)
  for cat,sub,keys in RULES:
-  score=sum(2 if k in t else 0 for k in keys)
+  score=sum(2 for k in keys if k in t) + (2 if sum(1 for k in keys if k in t)>=2 else 0)
   if score>best[2]:best=(cat,sub,score)
  for cat0,sub0,keys in filename_hints:
   score=sum(2 if k in fname else 0 for k in keys)
@@ -151,7 +150,7 @@ def classify(text,filename=""):
  return {
   "title":title,"category":cat,"subtype":sub,"country":country,"issuer":issuer,
   "document_number":number,"issue_date":issue,"expiry_date":expiry,"person_name":person,
-  "confidence":"high" if best[2]>=4 else ("medium" if best[2]>=2 else "low")
+  "confidence":"high" if best[2]>=6 else ("medium" if best[2]>=2 else "low")
  }
 
 def canonical_filename(meta,ext):
