@@ -327,7 +327,7 @@ async function copyText(t){try{await navigator.clipboard.writeText(t)}catch(e){p
 function wireDrop(el){
  ['dragenter','dragover'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.add('drag')}));
  ['dragleave','drop'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.remove('drag')}));
- el.addEventListener('drop',e=>queueUpload(e.dataTransfer.files))
+ el.addEventListener('drop',e=>{e.stopPropagation();queueUpload(e.dataTransfer.files)})
 }
 wireDrop($('uploadZone'));
 let dragDepth=0;
