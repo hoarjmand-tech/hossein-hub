@@ -2,6 +2,19 @@ import io,os,subprocess,tempfile,zipfile
 from pathlib import Path
 from PIL import Image
 from pypdf import PdfReader
+def _tess(path:Path):
+ cmds=[
+  ["tesseract",str(path),"stdout","-l","fas+eng+deu","--psm","6"],
+  ["tesseract",str(path),"stdout","-l","fas+eng+deu","--psm","11"],
+ ]
+ best=""
+ for cmd in cmds:
+  try:
+   x=subprocess.check_output(cmd,stderr=subprocess.DEVNULL,text=True,timeout=90)
+   if len(x.strip())>len(best.strip()):best=x
+  except Exception:pass
+ return best
+
 def extract_text(path:Path,mime:str|None):
  try:
   if mime=="application/pdf":
@@ -11,10 +24,10 @@ def extract_text(path:Path,mime:str|None):
     subprocess.run(["pdftoppm","-f","1","-l","10","-jpeg","-r","180",str(path),f"{td}/p"],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     out=[]
     for p in sorted(Path(td).glob("p-*.jpg")):
-     out.append(subprocess.check_output(["tesseract",str(p),"stdout","-l","fas+eng+deu"],stderr=subprocess.DEVNULL,text=True))
+     out.append(_tess(p))
     return "\n".join(out)
   if mime and mime.startswith("image/"):
-   return subprocess.check_output(["tesseract",str(path),"stdout","-l","fas+eng+deu"],stderr=subprocess.DEVNULL,text=True)
+   return _tess(path)
  except Exception as e: return ""
  return ""
 def thumbnail(path:Path,mime:str|None,out:Path):
