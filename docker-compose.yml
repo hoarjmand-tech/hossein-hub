@@ -1,281 +1,27 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: hossein-hub-postgres
+  archive:
+    build: ./archive_v2
+    container_name: hossein-archive
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets: [postgres_password]
-    volumes:
-      - ./postgres:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
-    networks: [hub-backend]
-    healthcheck:
-      test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-  archive-api:
-    build: ./app/backend
-    container_name: hossein-hub-archive
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      HUB_API_KEY_FILE: /run/secrets/hub_api_key
-      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
-      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
-      ARCHIVE_ROOT: /archive
-      BACKUPS_ROOT: /backups
-      COOKIE_SECURE: "false"
-      CONNECTOR_SECRETS_ROOT: /run/connector-secrets
-      NETOPS_SECRETS_ROOT: /run/netops-secrets
+      ARCHIVE_ROOT: /data
+      ARCHIVE_PASSWORD_FILE: /run/secrets/archive_password
       DRIVE_PUSH_TOKEN_FILE: /run/secrets/drive_push_token
-      NETOPS_DISCOVERY_CIDRS: 192.168.1.0/24,192.168.22.0/24
-    secrets: [postgres_password,hub_api_key,telegram_bot_token,telegram_admin_id,drive_push_token]
-    depends_on:
-      postgres:
-        condition: service_healthy
+      COOKIE_SECURE: "false"
+      MAX_UPLOAD_MB: "100"
+    secrets:
+      - archive_password
+      - drive_push_token
     volumes:
-      - ./archive:/archive
-      - ./backups:/backups:ro
-      - ./secrets/connectors:/run/connector-secrets:ro
-      - ./secrets/netops:/run/netops-secrets
-    expose: ["8080"]
+      - ./archive_data:/data
+    ports:
+      - "0.0.0.0:8080:8080"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL","curl -fsS http://localhost:8080/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-    networks: [hub-backend]
-  document-monitor-worker:
-    build: ./app/backend
-    container_name: hossein-hub-document-monitor
-    restart: unless-stopped
-    command: ["python","-m","app.document_monitor_worker"]
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
-      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
-      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
-    secrets: [postgres_password,telegram_bot_token,telegram_admin_id]
-    depends_on:
-      archive-api:
-        condition: service_healthy
-    networks: [hub-backend]
 
-  document-intake-worker:
-    build: ./app/backend
-    container_name: hossein-hub-document-intake
-    restart: unless-stopped
-    command: ["python","-m","app.document_intake_worker"]
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      HUB_API_KEY_FILE: /run/secrets/hub_api_key
-      ARCHIVE_ROOT: /archive
-      DOCUMENT_INTAKE_INTERVAL: "5"
-    secrets: [postgres_password,hub_api_key]
-    depends_on:
-      archive-api:
-        condition: service_healthy
-    volumes:
-      - ./archive:/archive
-    networks: [hub-backend]
-
-  ocr-worker:
-    build: ./app/backend
-    container_name: hossein-hub-ocr
-    restart: unless-stopped
-    command: ["python","-m","app.worker"]
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      HUB_API_KEY_FILE: /run/secrets/hub_api_key
-      ARCHIVE_ROOT: /archive
-    secrets: [postgres_password,hub_api_key]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./archive:/archive
-    networks: [hub-backend]
-
-  telegram-bot:
-    build: ./app/backend
-    container_name: hossein-hub-telegram
-    restart: unless-stopped
-    command: ["python","-m","app.telegram_bot"]
-    environment:
-      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
-      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
-      TELEGRAM_APP_URL: https://hossein-hub.tailf8fccb.ts.net/telegram
-      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
-    network_mode: host
-    secrets: [telegram_bot_token,telegram_admin_id]
-
-  monitor-worker:
-    build: ./app/backend
-    container_name: hossein-hub-monitor
-    restart: unless-stopped
-    command: ["python","-m","app.monitor_worker"]
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_HOST: 127.0.0.1
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      HUB_API_KEY_FILE: /run/secrets/hub_api_key
-      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
-      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
-      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
-    secrets: [postgres_password,hub_api_key,telegram_bot_token,telegram_admin_id]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    network_mode: host
-
-  netops-backup-worker:
-    build: ./app/backend
-    container_name: hossein-hub-netops-backup
-    restart: unless-stopped
-    command: ["python","-m","app.netops_backup_worker"]
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_HOST: 127.0.0.1
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
-      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
-      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
-      NETOPS_SECRETS_ROOT: /run/netops-secrets
-      NETOPS_BACKUP_INTERVAL: "86400"
-    secrets: [postgres_password,telegram_bot_token,telegram_admin_id]
-    depends_on:
-      archive-api:
-        condition: service_healthy
-    volumes:
-      - ./secrets/netops:/run/netops-secrets:ro
-    network_mode: host
-
-  netops-worker:
-    build: ./app/backend
-    container_name: hossein-hub-netops
-    restart: unless-stopped
-    command: ["python","-m","app.netops_worker"]
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_HOST: 127.0.0.1
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      NETOPS_SECRETS_ROOT: /run/netops-secrets
-    secrets: [postgres_password]
-    depends_on:
-      archive-api:
-        condition: service_healthy
-    volumes:
-      - ./secrets/netops:/run/netops-secrets:ro
-    network_mode: host
-
-  connector-monitor:
-    build: ./app/backend
-    container_name: hossein-hub-connector-monitor
-    restart: unless-stopped
-    command: ["python","-m","app.connector_monitor"]
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_HOST: 127.0.0.1
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
-      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
-      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
-      CONNECTOR_SECRETS_ROOT: /run/connector-secrets
-      CONNECTOR_STATE_FILE: /data/connector_state.json
-    secrets: [postgres_password,telegram_bot_token,telegram_admin_id]
-    depends_on:
-      archive-api:
-        condition: service_healthy
-    volumes:
-      - ./secrets/connectors:/run/connector-secrets:ro
-      - ./data:/data
-    network_mode: host
-
-  automation-worker:
-    build: ./app/backend
-    container_name: hossein-hub-automation
-    restart: unless-stopped
-    command: ["python","-m","app.automation_worker"]
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_HOST: 127.0.0.1
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
-      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
-      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
-      NETOPS_SECRETS_ROOT: /run/netops-secrets
-    secrets: [postgres_password,telegram_bot_token,telegram_admin_id]
-    depends_on:
-      archive-api:
-        condition: service_healthy
-    volumes:
-      - ./secrets/netops:/run/netops-secrets:ro
-    network_mode: host
-
-  maintenance-worker:
-    build: ./app/backend
-    container_name: hossein-hub-maintenance
-    restart: unless-stopped
-    command: ["python","-m","app.maintenance_worker"]
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      HUB_API_KEY_FILE: /run/secrets/hub_api_key
-    secrets: [postgres_password,hub_api_key]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks: [hub-backend]
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: hossein-hub-ollama
-    restart: unless-stopped
-    volumes:
-      - ./data/ollama:/root/.ollama
-    networks: [hub-backend]
-
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: hossein-hub-nginx
-    restart: unless-stopped
-    depends_on:
-      archive-api:
-        condition: service_healthy
-    volumes:
-      - ./config/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    ports:
-      - "0.0.0.0:8080:80"
-    networks: [hub-backend]
   tailscale:
     image: tailscale/tailscale:stable
     container_name: hossein-hub-tailscale
@@ -294,17 +40,7 @@ services:
       - SYS_MODULE
 
 secrets:
-  postgres_password:
-    file: ./secrets/postgres_password
-  hub_api_key:
+  archive_password:
     file: ./secrets/hub_api_key
-  telegram_bot_token:
-    file: ./secrets/telegram_bot_token
-  telegram_admin_id:
-    file: ./secrets/telegram_admin_id
   drive_push_token:
     file: ./secrets/drive_push_token
-networks:
-  hub-backend:
-    external: true
-    name: hossein-hub-backend
