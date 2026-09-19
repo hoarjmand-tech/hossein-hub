@@ -280,6 +280,14 @@ services:
       - ./secrets/rclone:/config/rclone:ro
     networks: [hub-backend]
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hossein-hub-ollama
+    restart: unless-stopped
+    volumes:
+      - ./data/ollama:/root/.ollama
+    networks: [hub-backend]
+
   nginx:
     image: nginx:1.27-alpine
     container_name: hossein-hub-nginx
