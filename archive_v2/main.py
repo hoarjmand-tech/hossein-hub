@@ -592,7 +592,7 @@ def revoke_share(token:str):
 
 def shared_row(token):
     with db() as con:
-        row=con.execute("""SELECT s.token,s.expires_at,s.downloads,d.* FROM shares s JOIN documents d ON d.id=s.document_id
+        row=con.execute("""SELECT s.token,s.expires_at,s.downloads,s.max_downloads,d.* FROM shares s JOIN documents d ON d.id=s.document_id
                            WHERE s.token=? AND d.deleted=0""",(token,)).fetchone()
     if not row:raise HTTPException(404)
     if datetime.fromisoformat(row["expires_at"])<datetime.now(timezone.utc):raise HTTPException(410,"Link expired")
@@ -602,12 +602,26 @@ def shared_row(token):
 @app.get("/s/{token}",response_class=HTMLResponse)
 def shared_page(token:str):
     row=shared_row(token)
-    title=(row["title"] or "Shared document").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-    return f"""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
-    <title>{title}</title><style>body{{font-family:system-ui;background:#0b1020;color:#eef2ff;margin:0}}header{{padding:18px 24px;background:#111831}}
-    main{{height:calc(100vh - 70px)}}iframe,img{{width:100%;height:100%;border:0;object-fit:contain;background:white}}a{{color:#9ec5ff}}</style>
-    <header><b>{title}</b> · <a href='/shared/{token}/file?download=1'>دانلود</a></header>
-    <main><iframe src='/shared/{token}/file'></iframe></main></html>"""
+    def eh(s):
+        return str(s or "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;")
+    title=eh(row["title"] or "Shared document")
+    original=eh(row["original_name"])
+    expires=eh(row["expires_at"][:10])
+    usage=(f'{row["downloads"]}/{row["max_downloads"]}' if row["max_downloads"] else f'{row["downloads"]}')
+    return f"""<!doctype html><html lang='fa' dir='rtl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
+    <meta name='theme-color' content='#0b1224'><title>{title}</title><style>
+    *{{box-sizing:border-box}}body{{font-family:Tahoma,Arial,system-ui;background:#0b1224;color:#eef3ff;margin:0}}
+    header{{padding:14px 18px;background:#111a31;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:2}}
+    .meta{{min-width:0}}h1{{font-size:16px;margin:0 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}small{{color:#98a6bd;direction:auto;display:block}}
+    .actions{{display:flex;gap:8px}}a{{text-decoration:none}}.btn{{display:inline-block;border-radius:10px;padding:9px 12px;background:#2868f0;color:white;font-weight:700}}
+    .secondary{{background:#1b2944;color:#dce6f8}}main{{height:calc(100vh - 78px);background:#202a3c}}iframe{{width:100%;height:100%;border:0;background:white}}
+    .info{{position:fixed;bottom:12px;left:12px;background:#0d1730de;border:1px solid #ffffff1a;border-radius:10px;padding:7px 10px;font-size:10px;color:#aebbd0}}
+    @media(max-width:650px){{header{{align-items:flex-start;flex-direction:column}}.actions{{width:100%}}.btn{{flex:1;text-align:center}}main{{height:calc(100vh - 126px)}}}}
+    </style></head><body>
+    <header><div class='meta'><h1>{title}</h1><small>{original}</small></div><div class='actions'><a class='btn secondary' href='/shared/{token}/file' target='_blank'>باز کردن</a><a class='btn' href='/shared/{token}/file?download=1'>دانلود</a></div></header>
+    <main><iframe src='/shared/{token}/file'></iframe></main>
+    <div class='info'>اعتبار تا {expires} · دانلود: {usage}</div>
+    </body></html>"""
 
 @app.get("/shared/{token}/file")
 def shared_file(token:str,download:int=0):
