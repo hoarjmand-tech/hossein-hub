@@ -31,6 +31,7 @@ PREV=ROOT/"previews"
 DB_PATH=ROOT/"archive.db"
 WEB=Path(__file__).parent/"web"
 MAX_UPLOAD=int(os.getenv("MAX_UPLOAD_MB","100"))*1024*1024
+PUBLIC_BASE_URL=os.getenv("PUBLIC_BASE_URL","").rstrip("/")
 COOKIE_SECURE=os.getenv("COOKIE_SECURE","false").lower()=="true"
 for p in (ROOT,FILES,TMP,PREV): p.mkdir(parents=True,exist_ok=True)
 
@@ -565,7 +566,8 @@ def create_share(did:str,payload:dict=Body(default={})):
     with db() as con:
         if not con.execute("SELECT 1 FROM documents WHERE id=? AND deleted=0",(did,)).fetchone():raise HTTPException(404)
         con.execute("INSERT INTO shares(token,document_id,expires_at,created_at,downloads,max_downloads) VALUES(?,?,?,?,0,?)",(token,did,exp,now(),max_downloads))
-    return {"ok":True,"token":token,"url":f"/s/{token}","expires_at":exp,"max_downloads":max_downloads}
+    rel=f"/s/{token}"
+    return {"ok":True,"token":token,"url":rel,"share_url":(PUBLIC_BASE_URL+rel if PUBLIC_BASE_URL else rel),"expires_at":exp,"max_downloads":max_downloads}
 
 
 @app.get("/api/documents/{did}/shares")
@@ -577,7 +579,9 @@ def list_shares(did:str):
     current=datetime.now(timezone.utc)
     for x in rows:
         x["url"]=f'/s/{x["token"]}'
+        x["share_url"]=(PUBLIC_BASE_URL+x["url"] if PUBLIC_BASE_URL else x["url"])
         x["expired"]=datetime.fromisoformat(x["expires_at"])<current
+        x["exhausted"]=bool(x["max_downloads"] and x["downloads"]>=x["max_downloads"])
     return {"items":rows}
 
 @app.delete("/api/shares/{token}")
@@ -610,8 +614,9 @@ def shared_file(token:str,download:int=0):
     row=shared_row(token)
     path=FILES/row["stored_name"]
     if not path.exists():raise HTTPException(404)
-    with db() as con:
-        con.execute("UPDATE shares SET downloads=downloads+1 WHERE token=?",(token,))
+    if download:
+        with db() as con:
+            con.execute("UPDATE shares SET downloads=downloads+1 WHERE token=?",(token,))
     return FileResponse(path,media_type=row["mime"],filename=row["original_name"],content_disposition_type="attachment" if download else "inline")
 
 
@@ -673,6 +678,10 @@ def export_documents(payload:dict=Body(...)):
             used.add(candidate.lower())
             z.write(path,candidate)
     return FileResponse(out,media_type="application/zip",filename="Hossein-Archive-Export.zip",background=BackgroundTask(lambda:out.unlink(missing_ok=True)))
+
+@app.get("/icon.svg")
+def icon():
+    return FileResponse(WEB/"icon.svg",media_type="image/svg+xml",headers={"Cache-Control":"public,max-age=86400"})
 
 @app.get("/manifest.webmanifest")
 def manifest():
