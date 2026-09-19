@@ -8,7 +8,7 @@ from .document_intelligence import classify,canonical_filename
 
 DOCS=ARCHIVE_ROOT/"documents"
 PREV=ARCHIVE_ROOT/"previews"
-INTELLIGENCE_VERSION=3
+INTELLIGENCE_VERSION=4
 
 def _item(db,did):
  return db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.document_id==did).order_by(DocumentIntakeItem.first_seen.desc()))
