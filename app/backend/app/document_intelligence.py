@@ -1,0 +1,113 @@
+import re,json,unicodedata
+from datetime import datetime,date
+from pathlib import Path
+
+RULES=[
+ ("identity","passport",["passport","reisepass","گذرنامه","پاسپورت"]),
+ ("identity","residence_permit",["aufenthaltstitel","residence permit","niederlassungsbewilligung","اقامت"]),
+ ("identity","id_card",["identity card","personalausweis","carta d'identità","کارت ملی","national id"]),
+ ("identity","driving_license",["driving licence","driver license","führerschein","گواهینامه"]),
+ ("insurance","health_insurance",["ögk","krankenversicherung","health insurance","بیمه درمان"]),
+ ("insurance","legal_insurance",["arag","rechtsschutz","legal insurance","بیمه حقوقی"]),
+ ("insurance","life_insurance",["lebensversicherung","life insurance","بیمه عمر"]),
+ ("housing","rental_contract",["mietvertrag","rental agreement","lease agreement","اجاره نامه","قرارداد اجاره"]),
+ ("finance","bank_statement",["kontoauszug","bank statement","account statement","صورت حساب بانکی"]),
+ ("finance","bank_letter",["mittelherkunft","bank confirmation","bank letter","bankbestätigung"]),
+ ("employment","employment_contract",["arbeitsvertrag","employment contract","قرارداد کار"]),
+ ("employment","salary",["gehaltsabrechnung","salary slip","payslip","فیش حقوق"]),
+ ("education","university",["university","universität","hochschule","دانشگاه","enrollment","immatrikulation"]),
+ ("legal","court",["gericht","court","دادگاه","beschluss","urteil"]),
+ ("legal","authority_letter",["ma35","magistrat","behörde","authority","amt","اداره"]),
+ ("tax","tax",["finanzamt","tax","steuer","مالیات"]),
+ ("invoice","invoice",["invoice","rechnung","فاکتور"]),
+ ("contract","contract",["vertrag","agreement","contract","قرارداد"]),
+]
+
+COUNTRIES={
+ "austria":["austria","österreich","اتریش"],
+ "italy":["italy","italia","ایتالیا"],
+ "iran":["iran","iranian","ایران"],
+ "germany":["germany","deutschland","آلمان"],
+ "turkey":["turkey","türkiye","ترکیه"],
+}
+
+ISSUERS=[
+ ("MA35",["ma35","magistratsabteilung 35"]),
+ ("ÖGK",["ögk","österreichische gesundheitskasse"]),
+ ("ARAG",["arag"]),
+ ("Erste Bank",["erste bank","sparkasse"]),
+ ("Finanzamt Österreich",["finanzamt österreich"]),
+]
+
+DATE_PATTERNS=[
+ r"\b(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.]([0-2]?\d|3[01])\b",
+ r"\b([0-2]?\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2})\b",
+]
+
+def norm(s):
+ s=unicodedata.normalize("NFKC",s or "").lower()
+ return re.sub(r"\s+"," ",s)
+
+def dates(text):
+ out=[]
+ for p in DATE_PATTERNS:
+  for m in re.finditer(p,text):
+   g=m.groups()
+   try:
+    if len(g[0])==4:y,mo,d=map(int,g)
+    else:d,mo,y=map(int,g)
+    x=date(y,mo,d)
+    if date(1990,1,1)<=x<=date(2100,12,31):out.append(x)
+   except:pass
+ return sorted(set(out))
+
+def document_number(text,subtype):
+ patterns={
+  "passport":[r"(?:passport\s*(?:no|number|nr)?\.?\s*[:#-]?\s*)([a-z0-9]{6,12})",r"\b([a-z][0-9]{7,9})\b"],
+  "residence_permit":[r"(?:card|permit|document)\s*(?:no|number|nr)?\.?\s*[:#-]?\s*([a-z0-9-]{6,20})"],
+  "id_card":[r"(?:id|identity|national)\s*(?:no|number)?\.?\s*[:#-]?\s*([a-z0-9-]{6,20})"],
+  "driving_license":[r"(?:licen[cs]e|führerschein)\s*(?:no|number|nr)?\.?\s*[:#-]?\s*([a-z0-9-]{5,20})"],
+ }
+ for p in patterns.get(subtype,[]):
+  m=re.search(p,text,re.I)
+  if m:return m.group(1).upper()
+ return None
+
+def classify(text,filename=""):
+ t=norm((text or "")+" "+(filename or ""))
+ best=("other","other",0)
+ for cat,sub,keys in RULES:
+  score=sum(2 if k in t else 0 for k in keys)
+  if score>best[2]:best=(cat,sub,score)
+ cat,sub,_=best
+ country=None
+ for c,keys in COUNTRIES.items():
+  if any(k in t for k in keys):country=c;break
+ issuer=None
+ for name,keys in ISSUERS:
+  if any(k in t for k in keys):issuer=name;break
+ ds=dates(t)
+ number=document_number(t,sub)
+ issue=ds[0] if ds else None
+ expiry=ds[-1] if len(ds)>1 else None
+ label={
+  "passport":"Passport","residence_permit":"Residence Permit","id_card":"ID Card","driving_license":"Driving License",
+  "health_insurance":"Health Insurance","legal_insurance":"Legal Insurance","life_insurance":"Life Insurance",
+  "rental_contract":"Rental Contract","bank_statement":"Bank Statement","bank_letter":"Bank Letter",
+  "employment_contract":"Employment Contract","salary":"Salary Slip","university":"University Document",
+  "court":"Court Document","authority_letter":"Authority Letter","tax":"Tax Document","invoice":"Invoice","contract":"Contract",
+ }.get(sub,"Document")
+ parts=[label]
+ if issuer:parts.append(issuer)
+ if number:parts.append(number)
+ if expiry:parts.append("exp-"+expiry.isoformat())
+ title=" - ".join(parts)
+ return {
+  "title":title,"category":cat,"subtype":sub,"country":country,"issuer":issuer,
+  "document_number":number,"issue_date":issue,"expiry_date":expiry,
+  "confidence":"high" if best[2]>=4 else ("medium" if best[2]>=2 else "low")
+ }
+
+def canonical_filename(meta,ext):
+ safe=re.sub(r"[^\w\-. ()]+","_",meta.get("title") or "Document",flags=re.UNICODE).strip(" ._")
+ return (safe[:180] or "Document")+(ext.lower() if ext else "")
