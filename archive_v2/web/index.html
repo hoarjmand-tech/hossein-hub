@@ -69,18 +69,7 @@ button,input,select{font:inherit}button{cursor:pointer}
 </head>
 <body>
 
-<section id="loginScreen">
-  <div class="login-card">
-    <div class="brandmark">HA</div>
-    <h1>Hossein Archive</h1>
-    <p>آرشیو اسناد شخصی؛ سریع، ساده و قابل جستجو</p>
-    <input id="password" class="field" type="password" placeholder="رمز ورود" autocomplete="current-password">
-    <button class="primary" style="width:100%;margin-top:12px" onclick="login()">ورود به آرشیو</button>
-    <div id="loginError" style="color:#b4232d;font-size:12px;margin-top:10px"></div>
-  </div>
-</section>
-
-<section id="app" class="hidden">
+<section id="app">
 <div class="shell">
   <aside class="sidebar" id="sidebar">
     <div class="side-brand">
@@ -93,7 +82,6 @@ button,input,select{font:inherit}button{cursor:pointer}
     <button class="navbtn" data-scope="trash" onclick="setScope('trash',this)"><span>سطل زباله</span><span id="nTrash" class="count">0</span></button>
     <div style="height:1px;background:#ffffff17;margin:18px 8px"></div>
     <button class="navbtn" onclick="openUpload()"><span>＋ افزودن سند</span></button>
-    <button class="navbtn" onclick="logout()"><span>خروج</span></button>
   </aside>
 
   <main class="main">
@@ -182,29 +170,10 @@ let state={scope:'all',docs:[],categories:[],current:null,timer:null};
 
 async function api(url,opt={}){
   const r=await fetch(url,opt);
-  if(r.status===401){showLogin();throw new Error('unauthorized')}
   let data=null;try{data=await r.json()}catch(e){}
   if(!r.ok)throw new Error(data?.detail||('HTTP '+r.status));
   return data;
 }
-function showLogin(){document.getElementById('app').classList.add('hidden');document.getElementById('loginScreen').classList.remove('hidden')}
-function showApp(){document.getElementById('loginScreen').classList.add('hidden');document.getElementById('app').classList.remove('hidden')}
-async function login(){
-  const password=document.getElementById('password').value;
-  document.getElementById('loginError').textContent='';
-  try{await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});showApp();await boot()}
-  catch(e){document.getElementById('loginError').textContent='رمز ورود صحیح نیست.'}
-}
-async function logout(){await fetch('/api/logout',{method:'POST'});showLogin()}
-document.getElementById('password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
-
-function fmtSize(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB'}
-function fmtDate(s){try{return new Intl.DateTimeFormat('fa-IR',{year:'numeric',month:'short',day:'numeric'}).format(new Date(s))}catch(e){return s}}
-function catName(id){return state.categories.find(x=>x.id===id)?.name||id||'بدون دسته'}
-function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2600)}
-function closeModal(id){document.getElementById(id).classList.add('hidden')}
-
 async function boot(){
   const c=await api('/api/categories');state.categories=c.items;
   const selects=[document.getElementById('category'),document.getElementById('eCategory')];
@@ -276,7 +245,7 @@ async function uploadFiles(files){
   const list=document.getElementById('uploadList');list.innerHTML='';
   const fd=new FormData();[...files].forEach(f=>{fd.append('files',f);list.insertAdjacentHTML('beforeend',`<div class="file-item"><span>${esc(f.name)}</span><span>${fmtSize(f.size)}</span></div>`)});
   try{
-    const r=await fetch('/api/documents/upload',{method:'POST',body:fd});if(r.status===401){showLogin();return}const data=await r.json();if(!r.ok)throw new Error(data.detail||'upload failed');
+    const r=await fetch('/api/documents/upload',{method:'POST',body:fd});const data=await r.json();if(!r.ok)throw new Error(data.detail||'upload failed');
     toast('فایل‌ها وارد صف آرشیو شدند');document.getElementById('fileInput').value='';setTimeout(()=>{closeModal('uploadModal');refreshAll()},500);
   }catch(e){toast('خطا در آپلود: '+e.message)}
 }
@@ -287,8 +256,8 @@ function wireDrop(el,global=false){
 }
 wireDrop(document.getElementById('uploadZone'));wireDrop(document.getElementById('miniDrop'),true);
 
-(async()=>{try{await api('/api/me');showApp();await boot()}catch(e){showLogin()}})();
-setInterval(()=>{if(!document.getElementById('app').classList.contains('hidden'))loadStats().catch(()=>{})},10000);
+boot().catch(e=>toast('خطا در بارگذاری: '+e.message));
+setInterval(()=>{loadStats().catch(()=>{})},10000);
 </script>
 </body>
 </html>
