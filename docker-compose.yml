@@ -89,7 +89,6 @@ services:
         condition: service_healthy
     volumes:
       - ./archive:/archive
-      - /mnt/hossein-inbox:/local-inbox:ro
     networks: [hub-backend]
 
   ocr-worker:
