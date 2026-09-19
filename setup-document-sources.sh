@@ -9,7 +9,12 @@ echo "=== 1) Windows I:\HosseinHub-Inbox SMB ==="
 if mountpoint -q /mnt/hossein-inbox; then
   echo "Windows I-drive inbox is already mounted."
 else
+  if command -v mount.cifs >/dev/null 2>&1; then
   ./setup-windows-i-inbox.sh
+else
+  echo "mount.cifs not available; Windows SMB setup deferred."
+  echo "Google Drive and document services will continue."
+fi
 fi
 
 echo
