@@ -36,12 +36,7 @@ def read_secret(path,env_name):
     except Exception:
         return os.getenv(env_name,"").strip()
 
-APP_PASSWORD=read_secret(os.getenv("ARCHIVE_PASSWORD_FILE","/run/secrets/archive_password"),"ARCHIVE_PASSWORD")
 DRIVE_TOKEN=read_secret(os.getenv("DRIVE_PUSH_TOKEN_FILE","/run/secrets/drive_push_token"),"DRIVE_PUSH_TOKEN")
-if not APP_PASSWORD:
-    raise RuntimeError("Archive password is not configured")
-
-SESSION_VALUE=hmac.new(APP_PASSWORD.encode(),b"hossein-archive-v2",hashlib.sha256).hexdigest()
 ALLOWED={"application/pdf","image/jpeg","image/png","image/webp","image/tiff"}
 GENERIC_NAME=re.compile(r"^(scan|img|image|document|doc|photo|screenshot)[ _-]*[0-9 _.-]*$",re.I)
 
@@ -156,11 +151,6 @@ def fts_upsert(con,row):
 
 def row_dict(row):
     return dict(row) if row else None
-
-def auth_cookie(archive_session: str|None=Cookie(None)):
-    if not archive_session or not hmac.compare_digest(archive_session,SESSION_VALUE):
-        raise HTTPException(401,"Unauthorized")
-    return True
 
 def ensure_drive_token(token):
     if not DRIVE_TOKEN or not token or not hmac.compare_digest(token,DRIVE_TOKEN):
@@ -332,40 +322,20 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="3.0",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="3.1",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"3.0"}
+    return {"status":"ok","app":"hossein-archive","version":"3.1","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
     return (WEB/"index.html").read_text(encoding="utf-8")
 
-@app.post("/api/login")
-def login(response:Response,payload:dict=Body(...)):
-    password=str(payload.get("password",""))
-    if not hmac.compare_digest(password,APP_PASSWORD):
-        raise HTTPException(401,"رمز نادرست است")
-    response.set_cookie("archive_session",SESSION_VALUE,httponly=True,samesite="lax",secure=COOKIE_SECURE,max_age=60*60*24*30)
-    return {"ok":True}
-
-@app.post("/api/logout")
-def logout(response:Response):
-    response.delete_cookie("archive_session")
-    return {"ok":True}
-
-@app.get("/api/me")
-def me(_=None,archive_session:str|None=Cookie(None)):
-    if not archive_session or not hmac.compare_digest(archive_session,SESSION_VALUE):
-        raise HTTPException(401)
-    return {"ok":True,"user":"Hossein"}
-
 @app.get("/api/stats")
 def stats(archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
     with db() as con:
         return {
             "documents":con.execute("SELECT count(*) FROM documents WHERE deleted=0").fetchone()[0],
@@ -377,8 +347,7 @@ def stats(archive_session:str|None=Cookie(None)):
         }
 
 @app.get("/api/documents")
-def documents(q:str="",category:str="",scope:str="all",sort:str="newest",archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def documents(q:str="",category:str="",scope:str="all",sort:str="newest"):
     where=["1=1"];args=[]
     where.append("deleted=?" );args.append(1 if scope=="trash" else 0)
     if scope=="favorites":where.append("favorite=1")
@@ -410,8 +379,7 @@ def documents(q:str="",category:str="",scope:str="all",sort:str="newest",archive
     return {"items":rows,"count":len(rows)}
 
 @app.get("/api/documents/{did}")
-def document(did:str,archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def document(did:str):
     with db() as con:
         row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
         if not row:raise HTTPException(404)
@@ -419,8 +387,7 @@ def document(did:str,archive_session:str|None=Cookie(None)):
         return d
 
 @app.post("/api/documents/upload")
-def upload(files:list[UploadFile]=File(...),archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def upload(files:list[UploadFile]=File(...)):
     out=[]
     for f in files[:50]:
         out.append(ingest_upload(f,"upload"))
@@ -434,8 +401,7 @@ def drive_upload(file:UploadFile=File(...),x_drive_token:str|None=Header(None,al
     return result
 
 @app.patch("/api/documents/{did}")
-def update_document(did:str,payload:dict=Body(...),archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def update_document(did:str,payload:dict=Body(...)):
     allowed={"title","category","tags","favorite"}
     updates=[];args=[]
     for k,v in payload.items():
@@ -452,8 +418,7 @@ def update_document(did:str,payload:dict=Body(...),archive_session:str|None=Cook
     return {"ok":True,"item":dict(row)}
 
 @app.post("/api/documents/{did}/apply-suggestion")
-def apply_suggestion(did:str,archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def apply_suggestion(did:str):
     with db() as con:
         row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
         if not row:raise HTTPException(404)
@@ -463,22 +428,19 @@ def apply_suggestion(did:str,archive_session:str|None=Cookie(None)):
     return {"ok":True}
 
 @app.delete("/api/documents/{did}")
-def trash_document(did:str,archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def trash_document(did:str):
     with db() as con:
         con.execute("UPDATE documents SET deleted=1,updated_at=? WHERE id=?",(now(),did))
     return {"ok":True}
 
 @app.post("/api/documents/{did}/restore")
-def restore_document(did:str,archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def restore_document(did:str):
     with db() as con:
         con.execute("UPDATE documents SET deleted=0,updated_at=? WHERE id=?",(now(),did))
     return {"ok":True}
 
 @app.delete("/api/documents/{did}/permanent")
-def permanent_delete(did:str,archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def permanent_delete(did:str):
     with db() as con:
         row=con.execute("SELECT stored_name FROM documents WHERE id=?",(did,)).fetchone()
         if not row:raise HTTPException(404)
@@ -490,8 +452,7 @@ def permanent_delete(did:str,archive_session:str|None=Cookie(None)):
     return {"ok":True}
 
 @app.get("/api/documents/{did}/file")
-def file_view(did:str,download:int=0,archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def file_view(did:str,download:int=0):
     with db() as con:
         row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
     if not row:raise HTTPException(404)
@@ -501,8 +462,7 @@ def file_view(did:str,download:int=0,archive_session:str|None=Cookie(None)):
     return FileResponse(path,media_type=row["mime"],filename=row["original_name"],content_disposition_type=disp)
 
 @app.post("/api/documents/{did}/share")
-def create_share(did:str,payload:dict=Body(default={}),archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
+def create_share(did:str,payload:dict=Body(default={})):
     days=max(1,min(int(payload.get("days",7)),365))
     token=secrets.token_urlsafe(24)
     exp=(datetime.now(timezone.utc)+timedelta(days=days)).isoformat()
@@ -540,7 +500,6 @@ def shared_file(token:str,download:int=0):
 
 @app.get("/api/categories")
 def categories(archive_session:str|None=Cookie(None)):
-    auth_cookie(archive_session)
     return {"items":[
         {"id":"other","name":"بدون دسته"},
         {"id":"identity","name":"هویتی"},
