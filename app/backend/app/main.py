@@ -28,6 +28,7 @@ from .automation_api import r as automation_router
 from .netops_library import r as netops_library_router
 from .topology import r as topology_router
 from .document_intake_api import r as document_intake_router
+from .google_drive_push_api import r as google_drive_push_router
 Base.metadata.create_all(engine)
 app=FastAPI(title="Hossein Hub",version="2.2.0")
 app.include_router(auth_router)
@@ -54,6 +55,7 @@ app.include_router(automation_router)
 app.include_router(netops_library_router)
 app.include_router(topology_router)
 app.include_router(document_intake_router)
+app.include_router(google_drive_push_router)
 WEB=Path(__file__).parent/"web"
 NO_CACHE={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 @app.get("/",include_in_schema=False)
