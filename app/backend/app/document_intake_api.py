@@ -86,8 +86,12 @@ def reclassify(did:str,db:Session=Depends(get_db)):
  if not d:raise HTTPException(404,"Document not found")
  v=db.scalar(select(DocumentVersion).where(DocumentVersion.document_id==did).order_by(DocumentVersion.version.desc()))
  if not v:raise HTTPException(404,"Version not found")
- meta=classify(v.ocr_text or "",v.original_name or "")
- d.title=meta["title"];d.category=meta["category"];d.subtype=meta["subtype"];d.country=meta["country"];d.issuer=meta["issuer"];d.document_number=meta["document_number"];d.issue_date=meta["issue_date"];d.expiry_date=meta["expiry_date"]
+ from .services import extract_text
+ p=ARCHIVE_ROOT/"documents"/v.stored_name
+ text=extract_text(p,v.mime_type) if p.exists() else (v.ocr_text or "")
+ if text:v.ocr_text=text;v.ocr_status="done"
+ meta=classify(text or "",v.original_name or "")
+ d.title=meta["title"];d.category=meta["category"];d.subtype=meta["subtype"];d.country=meta["country"];d.issuer=meta["issuer"];d.document_number=meta["document_number"];d.issue_date=meta["issue_date"];d.expiry_date=meta["expiry_date"];v.original_name=canonical_filename(meta,Path(v.original_name or "").suffix)
  item=db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.document_id==did).order_by(DocumentIntakeItem.first_seen.desc()))
  if item:
   item.detected_title=meta["title"];item.detected_category=meta["category"];item.detected_subtype=meta["subtype"];item.detected_country=meta["country"];item.detected_issuer=meta["issuer"];item.detected_number=meta["document_number"];item.detected_issue_date=meta["issue_date"];item.detected_expiry_date=meta["expiry_date"]
