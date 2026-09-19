@@ -35,8 +35,9 @@ services:
       COOKIE_SECURE: "false"
       CONNECTOR_SECRETS_ROOT: /run/connector-secrets
       NETOPS_SECRETS_ROOT: /run/netops-secrets
+      DRIVE_PUSH_TOKEN_FILE: /run/secrets/drive_push_token
       NETOPS_DISCOVERY_CIDRS: 192.168.1.0/24,192.168.22.0/24
-    secrets: [postgres_password,hub_api_key,telegram_bot_token,telegram_admin_id]
+    secrets: [postgres_password,hub_api_key,telegram_bot_token,telegram_admin_id,drive_push_token]
     depends_on:
       postgres:
         condition: service_healthy
@@ -318,6 +319,8 @@ secrets:
     file: ./secrets/telegram_admin_id
   rclone_config_pass:
     file: ./secrets/rclone_config_pass
+  drive_push_token:
+    file: ./secrets/drive_push_token
 networks:
   hub-backend:
     external: true
