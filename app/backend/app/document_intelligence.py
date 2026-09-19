@@ -87,12 +87,32 @@ def person_name(text):
    if v and v not in vals: vals.append(v)
  return " ".join(vals[:2]) or None
 
+def _original_filename(filename):
+ s=filename or ""
+ if s.startswith("gdrive__") and s.count("__")>=2:s=s.split("__",2)[2]
+ return s
+
 def classify(text,filename=""):
- t=norm((text or "")+" "+(filename or ""))
+ original=_original_filename(filename)
+ t=norm((text or "")+" "+original)
+ fname=norm(Path(original).stem.replace("_"," ").replace("-"," "))
+ filename_hints=[
+  ("identity","passport",["passport","پاسپورت","گذرنامه"]),
+  ("identity","driving_license",["driving","license","licence","گواهینامه"]),
+  ("education","university",["لیسانس","دانشگاه","degree","diploma","university","certificate","گواهینامه tuf"]),
+  ("legal","authority_letter",["ma35","beschwerde","vollmacht","وکالت"]),
+  ("housing","rental_contract",["mietvertrag","اجاره"]),
+  ("insurance","legal_insurance",["arag"]),
+  ("finance","bank_statement",["bank","konto","erste"]),
+ ]
+
  best=("other","other",0)
  for cat,sub,keys in RULES:
   score=sum(2 if k in t else 0 for k in keys)
   if score>best[2]:best=(cat,sub,score)
+ for cat0,sub0,keys in filename_hints:
+  score=sum(2 if k in fname else 0 for k in keys)
+  if score>best[2]:best=(cat0,sub0,score)
  cat,sub,_=best
  country=None
  for c,keys in COUNTRIES.items():
