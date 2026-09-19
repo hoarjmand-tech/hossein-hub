@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,6 +20,7 @@ from typing import BinaryIO
 import magic
 from fastapi import Body, Cookie, FastAPI, File, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
+from starlette.background import BackgroundTask
 from pypdf import PdfReader
 from PIL import Image
 
@@ -99,6 +101,7 @@ def init_db():
           ocr_text TEXT NOT NULL DEFAULT '',
           category TEXT NOT NULL DEFAULT 'other',
           tags TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
           suggested_title TEXT,
           suggestion_conf REAL NOT NULL DEFAULT 0,
           favorite INTEGER NOT NULL DEFAULT 0,
@@ -112,16 +115,30 @@ def init_db():
           document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
           expires_at TEXT NOT NULL,
           created_at TEXT NOT NULL,
-          downloads INTEGER NOT NULL DEFAULT 0
+          downloads INTEGER NOT NULL DEFAULT 0,
+          max_downloads INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_documents_deleted ON documents(deleted);
         CREATE INDEX IF NOT EXISTS idx_documents_sha ON documents(sha256);
         CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
+        CREATE INDEX IF NOT EXISTS idx_documents_source ON documents(source);
         """)
+        dcols={r["name"] for r in con.execute("PRAGMA table_info(documents)")}
+        if "notes" not in dcols:
+            con.execute("ALTER TABLE documents ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+        scols={r["name"] for r in con.execute("PRAGMA table_info(shares)")}
+        if "max_downloads" not in scols:
+            con.execute("ALTER TABLE shares ADD COLUMN max_downloads INTEGER NOT NULL DEFAULT 0")
         try:
-            con.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts
-              USING fts5(id UNINDEXED,title,original_name,ocr_text,tags,category,tokenize='unicode61')""")
+            con.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts2
+              USING fts5(id UNINDEXED,title,original_name,ocr_text,tags,category,notes,tokenize='unicode61')""")
+            con.execute("DELETE FROM documents_fts2")
+            for row in con.execute("SELECT * FROM documents"):
+                con.execute(
+                    "INSERT INTO documents_fts2(id,title,original_name,ocr_text,tags,category,notes) VALUES(?,?,?,?,?,?,?)",
+                    (row["id"],row["title"],row["original_name"],row["ocr_text"] or "",row["tags"] or "",row["category"] or "other",row["notes"] or "")
+                )
         except sqlite3.OperationalError:
             pass
         con.execute("UPDATE documents SET ocr_status='pending' WHERE ocr_status='processing'")
@@ -184,10 +201,10 @@ def make_snippet(text:str,q:str,limit:int=180):
 
 def fts_upsert(con,row):
     try:
-        con.execute("DELETE FROM documents_fts WHERE id=?",(row["id"],))
+        con.execute("DELETE FROM documents_fts2 WHERE id=?",(row["id"],))
         con.execute(
-            "INSERT INTO documents_fts(id,title,original_name,ocr_text,tags,category) VALUES(?,?,?,?,?,?)",
-            (row["id"],row["title"],row["original_name"],row["ocr_text"] or "",row["tags"] or "",row["category"] or "other")
+            "INSERT INTO documents_fts2(id,title,original_name,ocr_text,tags,category,notes) VALUES(?,?,?,?,?,?,?)",
+            (row["id"],row["title"],row["original_name"],row["ocr_text"] or "",row["tags"] or "",row["category"] or "other",row["notes"] or "")
         )
     except sqlite3.OperationalError:
         pass
@@ -366,13 +383,13 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="3.2",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="3.3",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"3.2","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"3.3","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
@@ -388,10 +405,11 @@ def stats():
             "trash":con.execute("SELECT count(*) FROM documents WHERE deleted=1").fetchone()[0],
             "storage":con.execute("SELECT coalesce(sum(size),0) FROM documents WHERE deleted=0").fetchone()[0],
             "processing":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND ocr_status IN ('pending','processing')").fetchone()[0],
+            "shares":con.execute("SELECT count(*) FROM shares WHERE expires_at>?",(now(),)).fetchone()[0],
         }
 
 @app.get("/api/documents")
-def documents(q:str="",category:str="",source:str="",ocr:str="",scope:str="all",sort:str="newest"):
+def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest"):
     where=["1=1"];args=[]
     where.append("deleted=?");args.append(1 if scope=="trash" else 0)
     if scope=="favorites":where.append("favorite=1")
@@ -402,6 +420,9 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",scope:str="all",
         where.append("source=?");args.append(source)
     if ocr in ("pending","processing","done","empty","failed"):
         where.append("ocr_status=?");args.append(ocr)
+    if days in (1,7,30,90,365):
+        cutoff=(datetime.now(timezone.utc)-timedelta(days=days)).isoformat()
+        where.append("created_at>=?");args.append(cutoff)
     if q.strip():
         tokens=re.findall(r"[\w\u0600-\u06ff-]+",q,re.UNICODE)
         ids=[]
@@ -409,7 +430,7 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",scope:str="all",
             try:
                 match=" AND ".join(f'"{x.replace(chr(34),"")}"*' for x in tokens[:10])
                 with db() as con:
-                    ids=[r[0] for r in con.execute("SELECT id FROM documents_fts WHERE documents_fts MATCH ? LIMIT 500",(match,))]
+                    ids=[r[0] for r in con.execute("SELECT id FROM documents_fts2 WHERE documents_fts2 MATCH ? LIMIT 500",(match,))]
             except Exception:
                 ids=[]
         if ids:
@@ -417,8 +438,8 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",scope:str="all",
             args.extend(ids)
         else:
             x=f"%{q.strip()}%"
-            where.append("(title LIKE ? OR original_name LIKE ? OR ocr_text LIKE ? OR tags LIKE ?)")
-            args.extend([x,x,x,x])
+            where.append("(title LIKE ? OR original_name LIKE ? OR ocr_text LIKE ? OR tags LIKE ? OR notes LIKE ?)")
+            args.extend([x,x,x,x,x])
     order={"newest":"created_at DESC","oldest":"created_at ASC","name":"title COLLATE NOCASE ASC","size":"size DESC"}.get(sort,"created_at DESC")
     sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text
             FROM documents WHERE {' AND '.join(where)} ORDER BY {order} LIMIT 500"""
@@ -455,7 +476,7 @@ def drive_upload(file:UploadFile=File(...),x_drive_token:str|None=Header(None,al
 
 @app.patch("/api/documents/{did}")
 def update_document(did:str,payload:dict=Body(...)):
-    allowed={"title","category","tags","favorite"}
+    allowed={"title","category","tags","notes","favorite"}
     updates=[];args=[]
     for k,v in payload.items():
         if k not in allowed:continue
@@ -498,10 +519,11 @@ def permanent_delete(did:str):
         row=con.execute("SELECT stored_name FROM documents WHERE id=?",(did,)).fetchone()
         if not row:raise HTTPException(404)
         con.execute("DELETE FROM shares WHERE document_id=?",(did,))
-        try:con.execute("DELETE FROM documents_fts WHERE id=?",(did,))
+        try:con.execute("DELETE FROM documents_fts2 WHERE id=?",(did,))
         except Exception:pass
         con.execute("DELETE FROM documents WHERE id=?",(did,))
     (FILES/row["stored_name"]).unlink(missing_ok=True)
+    (PREV/f"{did}.jpg").unlink(missing_ok=True)
     return {"ok":True}
 
 @app.get("/api/documents/{did}/preview")
@@ -537,19 +559,20 @@ def file_view(did:str,download:int=0):
 @app.post("/api/documents/{did}/share")
 def create_share(did:str,payload:dict=Body(default={})):
     days=max(1,min(int(payload.get("days",7)),365))
+    max_downloads=max(0,min(int(payload.get("max_downloads",0) or 0),10000))
     token=secrets.token_urlsafe(24)
     exp=(datetime.now(timezone.utc)+timedelta(days=days)).isoformat()
     with db() as con:
         if not con.execute("SELECT 1 FROM documents WHERE id=? AND deleted=0",(did,)).fetchone():raise HTTPException(404)
-        con.execute("INSERT INTO shares(token,document_id,expires_at,created_at,downloads) VALUES(?,?,?,?,0)",(token,did,exp,now()))
-    return {"ok":True,"token":token,"url":f"/s/{token}","expires_at":exp}
+        con.execute("INSERT INTO shares(token,document_id,expires_at,created_at,downloads,max_downloads) VALUES(?,?,?,?,0,?)",(token,did,exp,now(),max_downloads))
+    return {"ok":True,"token":token,"url":f"/s/{token}","expires_at":exp,"max_downloads":max_downloads}
 
 
 @app.get("/api/documents/{did}/shares")
 def list_shares(did:str):
     with db() as con:
         rows=[dict(r) for r in con.execute(
-            "SELECT token,expires_at,created_at,downloads FROM shares WHERE document_id=? ORDER BY created_at DESC",(did,)
+            "SELECT token,expires_at,created_at,downloads,max_downloads FROM shares WHERE document_id=? ORDER BY created_at DESC",(did,)
         )]
     current=datetime.now(timezone.utc)
     for x in rows:
@@ -569,6 +592,7 @@ def shared_row(token):
                            WHERE s.token=? AND d.deleted=0""",(token,)).fetchone()
     if not row:raise HTTPException(404)
     if datetime.fromisoformat(row["expires_at"])<datetime.now(timezone.utc):raise HTTPException(410,"Link expired")
+    if row["max_downloads"] and row["downloads"]>=row["max_downloads"]:raise HTTPException(410,"Download limit reached")
     return row
 
 @app.get("/s/{token}",response_class=HTMLResponse)
@@ -589,6 +613,74 @@ def shared_file(token:str,download:int=0):
     with db() as con:
         con.execute("UPDATE shares SET downloads=downloads+1 WHERE token=?",(token,))
     return FileResponse(path,media_type=row["mime"],filename=row["original_name"],content_disposition_type="attachment" if download else "inline")
+
+
+@app.get("/api/tags")
+def tags():
+    counts={}
+    with db() as con:
+        for row in con.execute("SELECT tags FROM documents WHERE deleted=0 AND tags<>''"):
+            for tag in re.split(r"[,،]",row["tags"] or ""):
+                t=tag.strip()
+                if t:counts[t]=counts.get(t,0)+1
+    items=sorted(({"name":k,"count":v} for k,v in counts.items()),key=lambda x:(-x["count"],x["name"].lower()))[:100]
+    return {"items":items}
+
+@app.post("/api/bulk")
+def bulk(payload:dict=Body(...)):
+    ids=[str(x) for x in payload.get("ids",[]) if x][:200]
+    action=str(payload.get("action",""))
+    if not ids:raise HTTPException(400,"No documents selected")
+    marks=",".join("?" for _ in ids)
+    with db() as con:
+        if action=="favorite":
+            con.execute(f"UPDATE documents SET favorite=1,updated_at=? WHERE id IN ({marks})",[now(),*ids])
+        elif action=="unfavorite":
+            con.execute(f"UPDATE documents SET favorite=0,updated_at=? WHERE id IN ({marks})",[now(),*ids])
+        elif action=="trash":
+            con.execute(f"UPDATE documents SET deleted=1,updated_at=? WHERE id IN ({marks})",[now(),*ids])
+        elif action=="restore":
+            con.execute(f"UPDATE documents SET deleted=0,updated_at=? WHERE id IN ({marks})",[now(),*ids])
+        elif action=="category":
+            category=str(payload.get("category","other"))[:100]
+            con.execute(f"UPDATE documents SET category=?,updated_at=? WHERE id IN ({marks})",[category,now(),*ids])
+        else:
+            raise HTTPException(400,"Unsupported bulk action")
+        rows=list(con.execute(f"SELECT * FROM documents WHERE id IN ({marks})",ids))
+        for row in rows:fts_upsert(con,row)
+    return {"ok":True,"count":len(ids)}
+
+@app.post("/api/export")
+def export_documents(payload:dict=Body(...)):
+    ids=[str(x) for x in payload.get("ids",[]) if x][:200]
+    if not ids:raise HTTPException(400,"No documents selected")
+    marks=",".join("?" for _ in ids)
+    with db() as con:
+        rows=list(con.execute(f"SELECT id,title,original_name,stored_name FROM documents WHERE deleted=0 AND id IN ({marks})",ids))
+    if not rows:raise HTTPException(404)
+    out=TMP/f"export-{uuid.uuid4()}.zip"
+    used=set()
+    with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as z:
+        for row in rows:
+            path=FILES/row["stored_name"]
+            if not path.exists():continue
+            name=clean_filename(row["original_name"])
+            base=Path(name).stem
+            ext=Path(name).suffix
+            candidate=name;i=2
+            while candidate.lower() in used:
+                candidate=f"{base} ({i}){ext}";i+=1
+            used.add(candidate.lower())
+            z.write(path,candidate)
+    return FileResponse(out,media_type="application/zip",filename="Hossein-Archive-Export.zip",background=BackgroundTask(lambda:out.unlink(missing_ok=True)))
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    return FileResponse(WEB/"manifest.webmanifest",media_type="application/manifest+json",headers={"Cache-Control":"no-cache"})
+
+@app.get("/sw.js")
+def service_worker():
+    return FileResponse(WEB/"sw.js",media_type="application/javascript",headers={"Cache-Control":"no-cache"})
 
 @app.get("/api/categories")
 def categories():
