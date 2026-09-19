@@ -1,5 +1,5 @@
 from fastapi import APIRouter,Depends
-from sqlalchemy import select,func
+from sqlalchemy import select,func,or_
 from sqlalchemy.orm import Session
 from .core import get_db
 from .auth import current_user
@@ -9,7 +9,7 @@ r=APIRouter(prefix="/api/overview",dependencies=[Depends(current_user)])
 def overview(db:Session=Depends(get_db)):
  return {
   "documents":db.scalar(select(func.count()).select_from(Document).where(Document.deleted==False)) or 0,
-  "documents_review":db.scalar(select(func.count()).select_from(DocumentIntakeItem).where(DocumentIntakeItem.status=="imported",DocumentIntakeItem.extracted_json.ilike('%"confidence": "low"%'))) or 0,
+  "documents_review":db.scalar(select(func.count()).select_from(DocumentIntakeItem).where(DocumentIntakeItem.status=="imported",or_(DocumentIntakeItem.extracted_json.ilike('%"confidence": "low"%'),DocumentIntakeItem.extracted_json.ilike('%"confidence": "medium"%')))) or 0,
   "reminders":db.scalar(select(func.count()).select_from(Reminder).where(Reminder.done==False)) or 0,
   "notifications":db.scalar(select(func.count()).select_from(Notification).where(Notification.read==False)) or 0,
   "assets":db.scalar(select(func.count()).select_from(ManagedAsset)) or 0,
