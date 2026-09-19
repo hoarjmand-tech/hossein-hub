@@ -85,14 +85,10 @@ services:
       HUB_API_KEY_FILE: /run/secrets/hub_api_key
       ARCHIVE_ROOT: /archive
       DOCUMENT_INTAKE_INTERVAL: "60"
-      OLLAMA_URL: http://ollama:11434
-      DOCUMENT_AI_MODEL: qwen2.5:3b
     secrets: [postgres_password,hub_api_key]
     depends_on:
       archive-api:
         condition: service_healthy
-      ollama:
-        condition: service_started
     volumes:
       - ./archive:/archive
     networks: [hub-backend]
