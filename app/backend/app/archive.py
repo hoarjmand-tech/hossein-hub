@@ -2,7 +2,7 @@ import hashlib,uuid,zipfile,io
 from pathlib import Path
 from datetime import date,timedelta
 from fastapi import APIRouter,Depends,HTTPException,UploadFile,File,Form,Query
-from fastapi.responses import FileResponse,StreamingResponse
+from fastapi.responses import FileResponse,StreamingResponse,Response
 from sqlalchemy import select,or_,func
 from sqlalchemy.orm import Session
 from .core import get_db,ARCHIVE_ROOT,MAX_UPLOAD
@@ -88,6 +88,12 @@ def download(vid:str,db:Session=Depends(get_db)):
  v=db.get(DocumentVersion,vid)
  if not v or not (p:=DOCS/v.stored_name).exists():raise HTTPException(404)
  log(db,"download","document",v.document_id,v.original_name);db.commit();return FileResponse(p,media_type=v.mime_type,filename=v.original_name)
+@r.get("/versions/{vid}/inline")
+def inline_version(vid:str,db:Session=Depends(get_db)):
+ v=db.get(DocumentVersion,vid)
+ if not v or not (p:=DOCS/v.stored_name).exists():raise HTTPException(404)
+ return FileResponse(p,media_type=v.mime_type,headers={"Content-Disposition":f'inline; filename="{safe_name(v.original_name)}"'})
+
 @r.get("/versions/{vid}/preview")
 def preview(vid:str,db:Session=Depends(get_db)):
  v=db.get(DocumentVersion,vid);p=PREV/f"{vid}.jpg"
