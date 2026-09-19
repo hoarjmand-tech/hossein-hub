@@ -12,7 +12,9 @@ def process(db,d,v):
  p=DOCS/v.stored_name
  if not p.exists(): return False
  text=extract_text(p,v.mime_type) or v.ocr_text or ""
- meta=classify(text,v.original_name or "")
+ item=db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.document_id==d.id).order_by(DocumentIntakeItem.first_seen.desc()))
+ source_name=item.original_name if item and item.original_name else (v.original_name or "")
+ meta=classify(text,source_name)
  ext=p.suffix.lower()[:15]
  canonical=canonical_filename(meta,ext)
  v.ocr_text=text or None
@@ -21,7 +23,6 @@ def process(db,d,v):
  d.title=meta["title"];d.category=meta["category"];d.subtype=meta["subtype"]
  d.country=meta["country"];d.issuer=meta["issuer"];d.document_number=meta["document_number"]
  d.issue_date=meta["issue_date"];d.expiry_date=meta["expiry_date"]
- item=db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.document_id==d.id).order_by(DocumentIntakeItem.first_seen.desc()))
  if item:
   item.detected_title=meta["title"];item.detected_category=meta["category"];item.detected_subtype=meta["subtype"]
   item.detected_country=meta["country"];item.detected_issuer=meta["issuer"];item.detected_number=meta["document_number"]
