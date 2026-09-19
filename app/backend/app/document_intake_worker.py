@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime
 from sqlalchemy import select
 from .core import SessionLocal,ARCHIVE_ROOT
-from .models import Document,DocumentVersion,DocumentIntakeItem,DocumentSourceState,Audit,Tag,DocumentTag
+from .models import Document,DocumentVersion,DocumentIntakeItem,DocumentSourceState,Audit,Tag,DocumentTag,Person
 from .services import detected_mime,extract_text,thumbnail
 from .document_intelligence import classify,canonical_filename
 
@@ -22,6 +22,14 @@ def sha256(p):
  with p.open("rb") as f:
   for b in iter(lambda:f.read(1048576),b""):h.update(b)
  return h.hexdigest()
+
+def match_person(db,text):
+ t=" ".join((text or "").lower().split())
+ hits=[]
+ for p in db.scalars(select(Person)):
+  n=" ".join((p.name or "").lower().split())
+  if len(n)>=4 and n in t:hits.append(p)
+ return hits[0].id if len(hits)==1 else None
 
 def source_state(db,name):
  x=db.scalar(select(DocumentSourceState).where(DocumentSourceState.source==name))
@@ -61,10 +69,11 @@ def handle(db,source,p):
  ext=p.suffix.lower()[:15]
  canonical=canonical_filename(meta,ext)
 
+ person_id=match_person(db,text)
  d=Document(
   title=meta["title"],category=meta["category"],subtype=meta["subtype"],country=meta["country"],issuer=meta["issuer"],
   document_number=meta["document_number"],issue_date=meta["issue_date"],expiry_date=meta["expiry_date"],
-  notes=f"Auto-imported from {source}. Original filename: {p.name}"
+  person_id=person_id,notes=f"Auto-imported from {source}. Original filename: {p.name}"
  )
  db.add(d);db.flush()
  stored=f"{d.id}/v1-{uuid.uuid4()}{ext}"
@@ -93,6 +102,8 @@ def handle(db,source,p):
   processed_at=datetime.utcnow()
  )
  db.add(item);st.items_imported+=1;st.last_success_at=datetime.utcnow()
+ if person_id:
+  db.add(Audit(action="document.intake.person_matched",object_type="document",object_id=d.id,detail=person_id))
  db.add(Audit(action="document.intake.import",object_type="document",object_id=d.id,detail=f"{source}:{p.name} -> {canonical}"))
  db.commit()
 
