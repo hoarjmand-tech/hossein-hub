@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$Folder = "D:\\HosseinHub-Inbox"
+$Folder = "I:\\HosseinHub-Inbox"
 $ShareName = "HosseinHub-Inbox"
 
 New-Item -ItemType Directory -Path $Folder -Force | Out-Null
