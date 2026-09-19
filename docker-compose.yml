@@ -256,31 +256,6 @@ services:
         condition: service_healthy
     networks: [hub-backend]
 
-  drive-sync:
-    image: rclone/rclone:1.70.3
-    container_name: hossein-hub-drive-sync
-    restart: unless-stopped
-    secrets: [rclone_config_pass]
-    entrypoint: ["/bin/sh","-c"]
-    command:
-      - |
-        RCLONE_CONFIG_PASS="$(cat /run/secrets/rclone_config_pass)"
-        export RCLONE_CONFIG_PASS
-        while true; do
-          rclone copy hossein-drive: /archive/drive-inbox \
-            --config /config/rclone/rclone.conf \
-            --drive-root-folder-id 1aDh5o-paAS7HwFRnKBo2EUHYXe-LV8PP \
-            --drive-skip-gdocs \
-            --include "*.pdf" --include "*.PDF" \
-            --include "*.jpg" --include "*.jpeg" --include "*.png" --include "*.webp" --include "*.tif" --include "*.tiff" \
-            --ignore-existing --no-traverse --log-level INFO
-          sleep 15
-        done
-    volumes:
-      - ./archive:/archive
-      - ./secrets/rclone:/config/rclone:ro
-    networks: [hub-backend]
-
   ollama:
     image: ollama/ollama:latest
     container_name: hossein-hub-ollama
@@ -327,8 +302,6 @@ secrets:
     file: ./secrets/telegram_bot_token
   telegram_admin_id:
     file: ./secrets/telegram_admin_id
-  rclone_config_pass:
-    file: ./secrets/rclone_config_pass
   drive_push_token:
     file: ./secrets/drive_push_token
 networks:
