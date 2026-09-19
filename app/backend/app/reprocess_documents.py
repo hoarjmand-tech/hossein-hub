@@ -26,13 +26,22 @@ def process(db,d,v):
   item.detected_title=meta["title"];item.detected_category=meta["category"];item.detected_subtype=meta["subtype"]
   item.detected_country=meta["country"];item.detected_issuer=meta["issuer"];item.detected_number=meta["document_number"]
   item.detected_issue_date=meta["issue_date"];item.detected_expiry_date=meta["expiry_date"]
-  item.extracted_json=json.dumps({"confidence":meta["confidence"],"canonical_filename":canonical,"reprocessed":True},ensure_ascii=False)
+  try: old=json.loads(item.extracted_json or "{}")
+  except Exception: old={}
+  old.update({"confidence":meta["confidence"],"canonical_filename":canonical,"person_name":meta.get("person_name"),"reprocessed":True})
+  item.extracted_json=json.dumps(old,ensure_ascii=False)
  db.add(Audit(action="document.intake.reprocess",object_type="document",object_id=d.id,detail=canonical))
  return True
 
 with SessionLocal() as db:
  n=0
- for d in db.scalars(select(Document).where(Document.deleted==False)):
+ items=list(db.scalars(select(DocumentIntakeItem).where(DocumentIntakeItem.status=="imported",DocumentIntakeItem.document_id!=None).order_by(DocumentIntakeItem.first_seen)))
+ seen=set()
+ for item in items:
+  if item.document_id in seen: continue
+  seen.add(item.document_id)
+  d=db.get(Document,item.document_id)
+  if not d or d.deleted: continue
   v=db.scalar(select(DocumentVersion).where(DocumentVersion.document_id==d.id).order_by(DocumentVersion.version.desc()))
   if v and process(db,d,v):
    db.commit();n+=1;print(f"REPROCESSED {n}: {v.original_name}",flush=True)
