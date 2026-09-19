@@ -87,6 +87,13 @@ def person_name(text):
    if v and v not in vals: vals.append(v)
  return " ".join(vals[:2]) or None
 
+def useful_source_title(filename):
+ s=_original_filename(filename)
+ stem=Path(s).stem
+ stem=re.sub(r"^(scan|img|image|document)[ _-]*\d.*$","",stem,flags=re.I)
+ stem=re.sub(r"[_]+"," ",stem).strip(" .-_")
+ return stem[:100] if len(stem)>=3 else None
+
 def _original_filename(filename):
  s=filename or ""
  if s.startswith("gdrive__") and s.count("__")>=2:s=s.split("__",2)[2]
@@ -132,6 +139,9 @@ def classify(text,filename=""):
   "employment_contract":"Employment Contract","salary":"Salary Slip","university":"University Document",
   "court":"Court Document","authority_letter":"Authority Letter","tax":"Tax Document","invoice":"Invoice","contract":"Contract",
  }.get(sub,"Document")
+ if sub=="other":
+  hint=useful_source_title(original)
+  if hint: label=hint
  parts=[label]
  if person:parts.append(person.title())
  if issuer:parts.append(issuer)
