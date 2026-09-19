@@ -1,32 +1,36 @@
-import re,json,unicodedata
-from datetime import datetime,date
+import re,unicodedata
+from datetime import date
 from pathlib import Path
 
+# Deterministic document intelligence. No external AI dependency.
+# Weighted phrases are intentionally multilingual because the archive contains
+# Persian, German and English documents.
 RULES=[
- ("identity","passport",["passport","reisepass","passeport","islamic republic of iran","گذرنامه","پاسپورت"]),
- ("identity","residence_permit",["aufenthaltstitel","residence permit","niederlassungsbewilligung","aufenthaltskarte","rot-weiß-rot","اقامت"]),
- ("identity","id_card",["identity card","personalausweis","carta d'identità","codice fiscale","کارت ملی","national id"]),
- ("identity","driving_license",["driving licence","driving license","driver license","führerschein","گواهینامه"]),
- ("education","university",["university","universität","hochschule","universita","laurea","degree","diploma","transcript","دانشگاه","دانشنامه","ریز نمرات","enrollment","immatrikulation"]),
- ("legal","authority_letter",["ma35","magistratsabteilung","magistrat der stadt wien","behörde","bescheid","beschwerde","vollmacht","authority","amt","اداره"]),
- ("housing","rental_contract",["mietvertrag","rental agreement","lease agreement","hauptmietvertrag","اجاره نامه","قرارداد اجاره"]),
- ("insurance","health_insurance",["ögk","österreichische gesundheitskasse","krankenversicherung","health insurance","بیمه درمان"]),
- ("insurance","legal_insurance",["arag","rechtsschutz","legal insurance","بیمه حقوقی"]),
- ("insurance","life_insurance",["lebensversicherung","life insurance","بیمه عمر"]),
- ("finance","bank_statement",["kontoauszug","bank statement","account statement","iban","bic","صورت حساب بانکی"]),
- ("finance","bank_letter",["mittelherkunft","bank confirmation","bank letter","bankbestätigung"]),
- ("employment","employment_contract",["arbeitsvertrag","dienstvertrag","employment contract","قرارداد کار"]),
- ("employment","salary",["gehaltsabrechnung","lohnabrechnung","salary slip","payslip","فیش حقوق"]),
- ("tax","tax",["finanzamt","steuer","tax office","مالیات"]),
- ("invoice","invoice",["invoice","rechnung","faktura","فاکتور"]),
- ("contract","contract",["vertrag","agreement","contract","قرارداد"]),
- ("legal","court",["gericht","court","دادگاه","beschluss","urteil"]),
+ ("identity","passport",12,["passport","reisepass","گذرنامه","پاسپورت","islamic republic of iran"]),
+ ("identity","residence_permit",12,["aufenthaltstitel","niederlassungsbewilligung","residence permit","aufenthaltskarte","rot-weiß-rot","کارت اقامت","اجازه اقامت"]),
+ ("identity","id_card",10,["identity card","personalausweis","carta d'identità","کارت ملی","کارت شناسایی","national id"]),
+ ("identity","driving_license",10,["driving licence","driving license","führerschein","گواهینامه رانندگی"]),
+ ("education","university",8,["university","universität","hochschule","universita","degree","diploma","transcript","enrollment","immatrikulation","دانشگاه","دانشنامه","ریز نمرات","گواهی اشتغال به تحصیل"]),
+ ("legal","authority_letter",8,["ma35","magistratsabteilung","magistrat der stadt wien","bescheid","beschwerde","vollmacht","behörde","نامه اداری","وکالتنامه","وکالت نامه"]),
+ ("legal","court",8,["gericht","court","urteil","beschluss","دادگاه","رای دادگاه","رأی دادگاه"]),
+ ("housing","rental_contract",9,["mietvertrag","hauptmietvertrag","rental agreement","lease agreement","اجاره نامه","اجاره‌نامه","قرارداد اجاره"]),
+ ("insurance","health_insurance",9,["ögk","österreichische gesundheitskasse","krankenversicherung","health insurance","بیمه درمان","بیمه سلامت"]),
+ ("insurance","legal_insurance",9,["arag","rechtsschutz","legal insurance","بیمه حقوقی"]),
+ ("insurance","life_insurance",9,["lebensversicherung","life insurance","بیمه عمر"]),
+ ("finance","bank_statement",8,["kontoauszug","bank statement","account statement","iban","bic","صورت حساب بانکی","صورتحساب بانکی","گردش حساب"]),
+ ("finance","bank_letter",8,["mittelherkunft","bank confirmation","bankbestätigung","bank letter","گواهی بانکی","نامه بانک"]),
+ ("employment","employment_contract",8,["arbeitsvertrag","dienstvertrag","employment contract","قرارداد کار","قرارداد استخدام"]),
+ ("employment","salary",8,["gehaltsabrechnung","lohnabrechnung","salary slip","payslip","فیش حقوق","فیش حقوقی"]),
+ ("tax","tax",8,["finanzamt","steuerbescheid","tax office","tax return","مالیات","اداره مالیات"]),
+ ("invoice","invoice",7,["invoice","rechnung","faktura","فاکتور","صورتحساب"]),
+ ("contract","contract",6,["vertrag","agreement","contract","قرارداد"]),
+ ("letter","letter",5,["betreff","subject:","موضوع:","موضوع ","dear sir","sehr geehrte","با سلام"]),
 ]
 
 COUNTRIES={
  "austria":["austria","österreich","اتریش"],
  "italy":["italy","italia","ایتالیا"],
- "iran":["iran","iranian","ایران"],
+ "iran":["iran","iranian","islamic republic of iran","ایران"],
  "germany":["germany","deutschland","آلمان"],
  "turkey":["turkey","türkiye","ترکیه"],
 }
@@ -35,30 +39,105 @@ ISSUERS=[
  ("MA35",["ma35","magistratsabteilung 35"]),
  ("ÖGK",["ögk","österreichische gesundheitskasse"]),
  ("ARAG",["arag"]),
- ("Erste Bank",["erste bank","sparkasse"]),
+ ("Erste Bank",["erste bank","erste österreichische","sparkasse"]),
  ("Finanzamt Österreich",["finanzamt österreich"]),
+ ("Magistrat Wien",["magistrat der stadt wien","stadt wien"]),
 ]
 
-DATE_PATTERNS=[
- r"\b(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.]([0-2]?\d|3[01])\b",
- r"\b([0-2]?\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2})\b",
-]
+LABELS={
+ "passport":"گذرنامه",
+ "residence_permit":"کارت اقامت",
+ "id_card":"کارت شناسایی",
+ "driving_license":"گواهینامه رانندگی",
+ "university":"مدرک دانشگاهی",
+ "authority_letter":"نامه اداری",
+ "court":"سند دادگاه",
+ "rental_contract":"قرارداد اجاره",
+ "health_insurance":"بیمه درمان",
+ "legal_insurance":"بیمه حقوقی",
+ "life_insurance":"بیمه عمر",
+ "bank_statement":"صورتحساب بانکی",
+ "bank_letter":"نامه بانکی",
+ "employment_contract":"قرارداد کاری",
+ "salary":"فیش حقوقی",
+ "tax":"سند مالیاتی",
+ "invoice":"فاکتور",
+ "contract":"قرارداد",
+ "letter":"نامه",
+ "other":"سند",
+}
+
+GENERIC_FILE_RE=re.compile(r"^(scan|img|image|document|doc|photo|screenshot)[ _-]*[0-9_-]*$",re.I)
+BAD_HEADING_WORDS={
+ "page","seite","scan","document","image","signature","unterschrift","www","http",
+ "telefon","phone","fax","email","e-mail"
+}
 
 def norm(s):
  s=unicodedata.normalize("NFKC",s or "").lower()
- return re.sub(r"\s+"," ",s)
+ s=s.replace("\u200c"," ")
+ return re.sub(r"\s+"," ",s).strip()
+
+def _original_filename(filename):
+ s=Path(filename or "").name
+ if s.startswith("gdrive__") and s.count("__")>=2:
+  s=s.split("__",2)[2]
+ return s
+
+def _letters_ratio(s):
+ if not s:return 0
+ useful=sum(ch.isalpha() for ch in s)
+ return useful/max(len(s),1)
+
+def _clean_line(s):
+ s=re.sub(r"\s+"," ",s or "").strip(" \t\r\n|:;,_-")
+ return s[:140]
+
+def meaningful_heading(text):
+ lines=[_clean_line(x) for x in (text or "").splitlines()]
+ candidates=[]
+ for i,line in enumerate(lines[:60]):
+  if len(line)<5 or len(line)>140:continue
+  n=norm(line)
+  if _letters_ratio(line)<0.45:continue
+  if any(w in n for w in BAD_HEADING_WORDS):continue
+  if re.fullmatch(r"[\d\W_]+",line):continue
+  score=0
+  if i<12:score+=4
+  if 8<=len(line)<=80:score+=3
+  if line.upper()==line and sum(c.isalpha() for c in line)>=5:score+=2
+  if any(k in n for k in ["bescheid","bestätigung","vertrag","rechnung","statement","certificate","گواهی","قرارداد","نامه","فاکتور","صورتحساب"]):score+=5
+  score+=min(sum(c.isalpha() for c in line)//8,4)
+  candidates.append((score,-i,line))
+ return max(candidates,default=(0,0,None))[2]
+
+def subject(text):
+ pats=[
+  r"(?im)^\s*(?:betreff|subject|موضوع)\s*[:\-]?\s*(.{4,120})$",
+  r"(?im)^\s*(?:re)\s*[:\-]\s*(.{4,120})$",
+ ]
+ for p in pats:
+  m=re.search(p,text or "")
+  if m:
+   s=_clean_line(m.group(1))
+   if _letters_ratio(s)>=0.35:return s
+ return None
 
 def dates(text):
  out=[]
- for p in DATE_PATTERNS:
-  for m in re.finditer(p,text):
+ patterns=[
+  r"\b(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.]([0-2]?\d|3[01])\b",
+  r"\b([0-2]?\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2})\b",
+ ]
+ for p in patterns:
+  for m in re.finditer(p,text or ""):
    g=m.groups()
    try:
     if len(g[0])==4:y,mo,d=map(int,g)
     else:d,mo,y=map(int,g)
     x=date(y,mo,d)
     if date(1990,1,1)<=x<=date(2100,12,31):out.append(x)
-   except:pass
+   except Exception:pass
  return sorted(set(out))
 
 def document_number(text,subtype):
@@ -67,93 +146,116 @@ def document_number(text,subtype):
   "residence_permit":[r"(?:card|permit|document)\s*(?:no|number|nr)?\.?\s*[:#-]?\s*([a-z0-9-]{6,20})"],
   "id_card":[r"(?:id|identity|national)\s*(?:no|number)?\.?\s*[:#-]?\s*([a-z0-9-]{6,20})"],
   "driving_license":[r"(?:licen[cs]e|führerschein)\s*(?:no|number|nr)?\.?\s*[:#-]?\s*([a-z0-9-]{5,20})"],
+  "invoice":[r"(?:invoice|rechnung|فاکتور)\s*(?:no|number|nr|شماره)?\.?\s*[:#-]?\s*([a-z0-9\-/]{3,24})"],
  }
  for p in patterns.get(subtype,[]):
-  m=re.search(p,text,re.I)
+  m=re.search(p,text or "",re.I)
   if m:return m.group(1).upper()
  return None
 
 def person_name(text):
- t=norm(text)
+ raw=text or ""
  patterns=[
-  r"(?:surname|last name|نام خانوادگی)[:\\s]+([a-zآ-ی][a-zآ-ی \\-]{2,40})",
-  r"(?:given names?|first name|نام)[:\\s]+([a-zآ-ی][a-zآ-ی \\-]{2,40})",
+  r"(?im)^\s*(?:surname|family name|last name|نام خانوادگی)\s*[:\-]?\s*([A-Za-zآ-ی][A-Za-zآ-ی .\-]{2,45})$",
+  r"(?im)^\s*(?:given names?|first name|نام)\s*[:\-]?\s*([A-Za-zآ-ی][A-Za-zآ-ی .\-]{2,45})$",
+  r"(?im)^\s*(?:name|نام و نام خانوادگی)\s*[:\-]?\s*([A-Za-zآ-ی][A-Za-zآ-ی .\-]{3,60})$",
  ]
  vals=[]
  for p in patterns:
-  m=re.search(p,t,re.I)
+  m=re.search(p,raw)
   if m:
-   v=" ".join(m.group(1).split())[:60]
-   if v and v not in vals: vals.append(v)
+   v=_clean_line(m.group(1))
+   if v and v not in vals:vals.append(v)
  return " ".join(vals[:2]) or None
 
 def useful_source_title(filename):
- s=_original_filename(filename)
- stem=Path(s).stem
- stem=re.sub(r"^(scan|img|image|document)[ _-]*\d.*$","",stem,flags=re.I)
+ stem=Path(_original_filename(filename)).stem
  stem=re.sub(r"[_]+"," ",stem).strip(" .-_")
+ if not stem or GENERIC_FILE_RE.match(stem):return None
+ if re.match(r"^(scan|img|image|document|doc)[ _-]*\d",stem,re.I):return None
  return stem[:100] if len(stem)>=3 else None
 
-def _original_filename(filename):
- s=filename or ""
- if s.startswith("gdrive__") and s.count("__")>=2:s=s.split("__",2)[2]
- return s
+def _rule_score(t,fname,keys,base):
+ hits=0
+ for k in keys:
+  nk=norm(k)
+  if nk in t:hits+=2
+  if nk in fname:hits+=1
+ return base+hits*2 if hits else 0
 
 def classify(text,filename=""):
  original=_original_filename(filename)
- t=norm((text or "")+" "+original)
+ t=norm(text)
  fname=norm(Path(original).stem.replace("_"," ").replace("-"," "))
- filename_hints=[
-  ("identity","passport",["passport","پاسپورت","گذرنامه"]),
-  ("identity","driving_license",["driving","license","licence","گواهینامه"]),
-  ("education","university",["لیسانس","دانشگاه","degree","diploma","university","certificate","گواهینامه tuf"]),
-  ("legal","authority_letter",["ma35","beschwerde","vollmacht","وکالت"]),
-  ("housing","rental_contract",["mietvertrag","اجاره"]),
-  ("insurance","legal_insurance",["arag"]),
-  ("finance","bank_statement",["bank","konto","erste"]),
- ]
+ best=("other","other",0,[])
+ for cat,sub,base,keys in RULES:
+  score=_rule_score(t,fname,keys,base)
+  matched=[k for k in keys if norm(k) in t or norm(k) in fname]
+  if score>best[2]:best=(cat,sub,score,matched)
 
- best=("other","other",0)
- for cat,sub,keys in RULES:
-  score=sum(2 for k in keys if k in t) + (2 if sum(1 for k in keys if k in t)>=2 else 0)
-  if score>best[2]:best=(cat,sub,score)
- for cat0,sub0,keys in filename_hints:
-  score=sum(2 if k in fname else 0 for k in keys)
-  if score>best[2]:best=(cat0,sub0,score)
- cat,sub,_=best
+ cat,sub,score,matched=best
+ if score==0:
+  cat=sub="other"
+
  country=None
  for c,keys in COUNTRIES.items():
-  if any(k in t for k in keys):country=c;break
+  if any(norm(k) in t for k in keys):country=c;break
+
  issuer=None
  for name,keys in ISSUERS:
-  if any(k in t for k in keys):issuer=name;break
+  if any(norm(k) in t for k in keys):issuer=name;break
+
  ds=dates(t)
- number=document_number(t,sub)
- person=person_name(t)
+ number=document_number(text or "",sub)
+ person=person_name(text or "")
+ subj=subject(text or "")
+ heading=meaningful_heading(text or "")
  issue=ds[0] if ds else None
  expiry=ds[-1] if len(ds)>1 else None
- label={
-  "passport":"Passport","residence_permit":"Residence Permit","id_card":"ID Card","driving_license":"Driving License",
-  "health_insurance":"Health Insurance","legal_insurance":"Legal Insurance","life_insurance":"Life Insurance",
-  "rental_contract":"Rental Contract","bank_statement":"Bank Statement","bank_letter":"Bank Letter",
-  "employment_contract":"Employment Contract","salary":"Salary Slip","university":"University Document",
-  "court":"Court Document","authority_letter":"Authority Letter","tax":"Tax Document","invoice":"Invoice","contract":"Contract",
- }.get(sub,"Document")
- if sub=="other":
-  hint=useful_source_title(original)
-  if hint: label=hint
+
+ label=LABELS.get(sub,"سند")
  parts=[label]
- if person:parts.append(person.title())
- if issuer:parts.append(issuer)
+ if subj and norm(subj) not in norm(label):parts.append(subj)
+ elif issuer:parts.append(issuer)
+ elif heading and norm(heading) not in norm(label):parts.append(heading)
+ if person and person.lower() not in " ".join(parts).lower():parts.append(person.title())
  if number:parts.append(number)
- if expiry:parts.append("exp-"+expiry.isoformat())
- title=" - ".join(parts)
+
+ # Fallback must still be content-derived when OCR found usable text.
+ if sub=="other":
+  if subj:title=subj
+  elif heading:title=heading
+  else:title=useful_source_title(original) or "سند اسکن‌شده"
+ else:
+  title=" - ".join(x for x in parts if x)
+
+ # Keep titles usable in UI and filenames.
+ title=re.sub(r"\s+"," ",title).strip(" .-_")[:180]
+ if not title:title="سند"
+
+ if score>=14:confidence="high"
+ elif score>=8:confidence="medium"
+ elif heading or subj:confidence="medium"
+ else:confidence="low"
+
  return {
-  "title":title,"category":cat,"subtype":sub,"country":country,"issuer":issuer,
-  "document_number":number,"issue_date":issue,"expiry_date":expiry,"person_name":person,
-  "confidence":"high" if best[2]>=6 else ("medium" if best[2]>=2 else "low")
+  "title":title,
+  "category":cat,
+  "subtype":sub,
+  "country":country,
+  "issuer":issuer,
+  "document_number":number,
+  "issue_date":issue,
+  "expiry_date":expiry,
+  "person_name":person,
+  "subject":subj,
+  "heading":heading,
+  "confidence":confidence,
+  "score":score,
+  "matched":matched[:8],
  }
 
 def canonical_filename(meta,ext):
- safe=re.sub(r"[^\w\-. ()]+","_",meta.get("title") or "Document",flags=re.UNICODE).strip(" ._")
- return (safe[:180] or "Document")+(ext.lower() if ext else "")
+ safe=re.sub(r"[^\w\-. ()\u0600-\u06ff]+","_",meta.get("title") or "Document",flags=re.UNICODE).strip(" ._")
+ ext=(ext or "").lower()
+ return (safe[:180] or "Document")+ext
