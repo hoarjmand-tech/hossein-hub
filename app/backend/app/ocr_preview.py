@@ -7,7 +7,8 @@ from .services import extract_text
 from .document_preprocess import enhanced_tesseract
 from .document_intelligence import classify,canonical_filename
 
-DOCS=ARCHIVE_ROOT/"documents"\nLIMIT=int(__import__("os").getenv("OCR_PREVIEW_LIMIT","0"))
+DOCS=ARCHIVE_ROOT/"documents"
+LIMIT=int(__import__("os").getenv("OCR_PREVIEW_LIMIT","0"))
 def quality(text):
  n=len((text or "").strip())
  if n>=800:return "high"
