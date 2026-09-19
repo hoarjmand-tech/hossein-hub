@@ -52,6 +52,25 @@ services:
       timeout: 5s
       retries: 5
     networks: [hub-backend]
+  document-monitor-worker:
+    build: ./app/backend
+    container_name: hossein-hub-document-monitor
+    restart: unless-stopped
+    command: ["python","-m","app.document_monitor_worker"]
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_ADMIN_ID_FILE: /run/secrets/telegram_admin_id
+      TELEGRAM_PROXY: socks5h://127.0.0.1:10808
+    secrets: [postgres_password,telegram_bot_token,telegram_admin_id]
+    depends_on:
+      archive-api:
+        condition: service_healthy
+    networks: [hub-backend]
+
   document-intake-worker:
     build: ./app/backend
     container_name: hossein-hub-document-intake
