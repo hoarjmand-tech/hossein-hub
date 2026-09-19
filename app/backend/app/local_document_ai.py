@@ -13,4 +13,5 @@ OCR:
   r=requests.post(OLLAMA_URL+"/api/generate",json={"model":MODEL,"prompt":prompt,"stream":False,"format":"json"},timeout=180)
   r.raise_for_status(); x=json.loads(r.json().get("response","{}"))
   return x if isinstance(x,dict) else {}
- except Exception:return {}
+ except Exception as e:
+  return {"_error":str(e)[:500]}
