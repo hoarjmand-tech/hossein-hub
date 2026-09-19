@@ -12,7 +12,7 @@ BACKUPS=Path(os.getenv("BACKUPS_ROOT","/backups"))
 def status(db:Session=Depends(get_db)):
  db.execute(text("select 1"))
  total,used,free=shutil.disk_usage("/")
- return {"app":"Hossein Hub","version":"2.1.0","database":"ok","hostname":platform.node(),"python":platform.python_version(),"disk":{"total":total,"used":used,"free":free},"time":datetime.utcnow().isoformat()+"Z"}
+ return {"app":"Hossein Hub","version":"2.2.0","database":"ok","hostname":platform.node(),"python":platform.python_version(),"disk":{"total":total,"used":used,"free":free},"time":datetime.utcnow().isoformat()+"Z"}
 @r.get("/backups")
 def backups():
  out=[]
