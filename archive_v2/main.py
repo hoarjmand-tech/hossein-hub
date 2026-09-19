@@ -20,15 +20,17 @@ import magic
 from fastapi import Body, Cookie, FastAPI, File, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pypdf import PdfReader
+from PIL import Image
 
 ROOT=Path(os.getenv("ARCHIVE_ROOT","/data"))
 FILES=ROOT/"files"
 TMP=ROOT/"tmp"
+PREV=ROOT/"previews"
 DB_PATH=ROOT/"archive.db"
 WEB=Path(__file__).parent/"web"
 MAX_UPLOAD=int(os.getenv("MAX_UPLOAD_MB","100"))*1024*1024
 COOKIE_SECURE=os.getenv("COOKIE_SECURE","false").lower()=="true"
-for p in (ROOT,FILES,TMP): p.mkdir(parents=True,exist_ok=True)
+for p in (ROOT,FILES,TMP,PREV): p.mkdir(parents=True,exist_ok=True)
 
 def read_secret(path,env_name):
     try:
@@ -138,6 +140,47 @@ def is_generic_title(title):
     if not s:return True
     if GENERIC_NAME.match(s):return True
     return bool(re.match(r"^(scan|img|image|document|doc)[ _-]*\d",s,re.I))
+
+
+def make_preview(path:Path,mime:str,did:str):
+    out=PREV/f"{did}.jpg"
+    try:
+        if mime=="application/pdf":
+            with tempfile.TemporaryDirectory() as td:
+                base=str(Path(td)/"preview")
+                subprocess.run(
+                    ["pdftoppm","-f","1","-singlefile","-jpeg","-scale-to","1000",str(path),base],
+                    check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45
+                )
+                src=Path(base+".jpg")
+                if src.exists(): shutil.copy2(src,out)
+        elif mime.startswith("image/"):
+            im=Image.open(path)
+            im.thumbnail((1000,1200))
+            canvas=Image.new("RGB",im.size,"white")
+            if im.mode in ("RGBA","LA"):
+                canvas.paste(im,(0,0),im.getchannel("A"))
+            else:
+                canvas.paste(im.convert("RGB"),(0,0))
+            canvas.save(out,"JPEG",quality=84,optimize=True)
+        return out.exists()
+    except Exception as e:
+        print("preview:",did,e,flush=True)
+        return False
+
+def make_snippet(text:str,q:str,limit:int=180):
+    text=re.sub(r"\s+"," ",text or "").strip()
+    if not text:return ""
+    if not q:return text[:limit]
+    low=text.lower();need=q.lower().strip()
+    pos=low.find(need)
+    if pos<0:
+        for token in re.findall(r"[\w\u0600-\u06ff-]+",need,re.UNICODE):
+            pos=low.find(token)
+            if pos>=0:break
+    if pos<0:return text[:limit]
+    start=max(0,pos-limit//3);end=min(len(text),start+limit)
+    return ("…" if start else "")+text[start:end]+("…" if end<len(text) else "")
 
 def fts_upsert(con,row):
     try:
@@ -289,6 +332,7 @@ def process_one():
         con.execute("UPDATE documents SET ocr_status='processing',updated_at=? WHERE id=?",(now(),row["id"]))
     path=FILES/row["stored_name"]
     try:
+        make_preview(path,row["mime"],row["id"])
         text=extract_ocr(path,row["mime"])
         meta=smart_metadata(text)
         title=row["title"]
@@ -322,20 +366,20 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="3.1",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="3.2",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"3.1","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"3.2","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
     return (WEB/"index.html").read_text(encoding="utf-8")
 
 @app.get("/api/stats")
-def stats(archive_session:str|None=Cookie(None)):
+def stats():
     with db() as con:
         return {
             "documents":con.execute("SELECT count(*) FROM documents WHERE deleted=0").fetchone()[0],
@@ -347,13 +391,17 @@ def stats(archive_session:str|None=Cookie(None)):
         }
 
 @app.get("/api/documents")
-def documents(q:str="",category:str="",scope:str="all",sort:str="newest"):
+def documents(q:str="",category:str="",source:str="",ocr:str="",scope:str="all",sort:str="newest"):
     where=["1=1"];args=[]
-    where.append("deleted=?" );args.append(1 if scope=="trash" else 0)
+    where.append("deleted=?");args.append(1 if scope=="trash" else 0)
     if scope=="favorites":where.append("favorite=1")
     if scope=="uncategorized":where.append("category='other'")
     if category:
         where.append("category=?");args.append(category)
+    if source in ("upload","google_drive"):
+        where.append("source=?");args.append(source)
+    if ocr in ("pending","processing","done","empty","failed"):
+        where.append("ocr_status=?");args.append(ocr)
     if q.strip():
         tokens=re.findall(r"[\w\u0600-\u06ff-]+",q,re.UNICODE)
         ids=[]
@@ -372,10 +420,15 @@ def documents(q:str="",category:str="",scope:str="all",sort:str="newest"):
             where.append("(title LIKE ? OR original_name LIKE ? OR ocr_text LIKE ? OR tags LIKE ?)")
             args.extend([x,x,x,x])
     order={"newest":"created_at DESC","oldest":"created_at ASC","name":"title COLLATE NOCASE ASC","size":"size DESC"}.get(sort,"created_at DESC")
-    sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at
+    sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text
             FROM documents WHERE {' AND '.join(where)} ORDER BY {order} LIMIT 500"""
     with db() as con:
-        rows=[dict(r) for r in con.execute(sql,args)]
+        rows=[]
+        for r in con.execute(sql,args):
+            d=dict(r)
+            d["snippet"]=make_snippet(d.pop("ocr_text",""),q) if q.strip() else ""
+            d["has_preview"]=(PREV/f'{d["id"]}.jpg').exists()
+            rows.append(d)
     return {"items":rows,"count":len(rows)}
 
 @app.get("/api/documents/{did}")
@@ -451,6 +504,26 @@ def permanent_delete(did:str):
     (FILES/row["stored_name"]).unlink(missing_ok=True)
     return {"ok":True}
 
+@app.get("/api/documents/{did}/preview")
+def preview_file(did:str):
+    with db() as con:
+        row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
+    if not row:raise HTTPException(404)
+    out=PREV/f"{did}.jpg"
+    if not out.exists():
+        path=FILES/row["stored_name"]
+        if not path.exists() or not make_preview(path,row["mime"],did):
+            raise HTTPException(404)
+    return FileResponse(out,media_type="image/jpeg",headers={"Cache-Control":"private,max-age=3600"})
+
+@app.post("/api/documents/{did}/retry-ocr")
+def retry_ocr(did:str):
+    with db() as con:
+        row=con.execute("SELECT id FROM documents WHERE id=?",(did,)).fetchone()
+        if not row:raise HTTPException(404)
+        con.execute("UPDATE documents SET ocr_status='pending',updated_at=? WHERE id=?",(now(),did))
+    return {"ok":True}
+
 @app.get("/api/documents/{did}/file")
 def file_view(did:str,download:int=0):
     with db() as con:
@@ -470,6 +543,25 @@ def create_share(did:str,payload:dict=Body(default={})):
         if not con.execute("SELECT 1 FROM documents WHERE id=? AND deleted=0",(did,)).fetchone():raise HTTPException(404)
         con.execute("INSERT INTO shares(token,document_id,expires_at,created_at,downloads) VALUES(?,?,?,?,0)",(token,did,exp,now()))
     return {"ok":True,"token":token,"url":f"/s/{token}","expires_at":exp}
+
+
+@app.get("/api/documents/{did}/shares")
+def list_shares(did:str):
+    with db() as con:
+        rows=[dict(r) for r in con.execute(
+            "SELECT token,expires_at,created_at,downloads FROM shares WHERE document_id=? ORDER BY created_at DESC",(did,)
+        )]
+    current=datetime.now(timezone.utc)
+    for x in rows:
+        x["url"]=f'/s/{x["token"]}'
+        x["expired"]=datetime.fromisoformat(x["expires_at"])<current
+    return {"items":rows}
+
+@app.delete("/api/shares/{token}")
+def revoke_share(token:str):
+    with db() as con:
+        con.execute("DELETE FROM shares WHERE token=?",(token,))
+    return {"ok":True}
 
 def shared_row(token):
     with db() as con:
@@ -499,7 +591,7 @@ def shared_file(token:str,download:int=0):
     return FileResponse(path,media_type=row["mime"],filename=row["original_name"],content_disposition_type="attachment" if download else "inline")
 
 @app.get("/api/categories")
-def categories(archive_session:str|None=Cookie(None)):
+def categories():
     return {"items":[
         {"id":"other","name":"بدون دسته"},
         {"id":"identity","name":"هویتی"},
