@@ -57,7 +57,7 @@ def version(did:str,file:UploadFile=File(...),kind:str=Form("updated"),db:Sessio
 def docs(q:str|None=None,category:str|None=None,subtype:str|None=None,country:str|None=None,issuer:str|None=None,person_id:str|None=None,case_id:str|None=None,deleted:bool=False,favorite:bool|None=None,expiring_days:int|None=None,limit:int=Query(100,le=500),db:Session=Depends(get_db)):
  s=select(Document).where(Document.deleted==deleted)
  if q:
-  x=f"%{q}%";ocr_ids=select(DocumentVersion.document_id).where(DocumentVersion.ocr_text.ilike(x));tag_ids=select(DocumentTag.document_id).join(Tag,Tag.id==DocumentTag.tag_id).where(Tag.name.ilike(x));s=s.where(or_(Document.title.ilike(x),Document.notes.ilike(x),Document.document_number.ilike(x),Document.issuer.ilike(x),Document.id.in_(ocr_ids),Document.id.in_(tag_ids)))
+  x=f"%{q}%";ocr_ids=select(DocumentVersion.document_id).where(or_(DocumentVersion.ocr_text.ilike(x),DocumentVersion.original_name.ilike(x)));tag_ids=select(DocumentTag.document_id).join(Tag,Tag.id==DocumentTag.tag_id).where(Tag.name.ilike(x));s=s.where(or_(Document.title.ilike(x),Document.notes.ilike(x),Document.document_number.ilike(x),Document.issuer.ilike(x),Document.id.in_(ocr_ids),Document.id.in_(tag_ids)))
  if category:s=s.where(Document.category==category)
  if subtype:s=s.where(Document.subtype==subtype)
  if country:s=s.where(Document.country==country)
