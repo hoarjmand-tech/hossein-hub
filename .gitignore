@@ -12,3 +12,5 @@ __pycache__/
 .pytest_cache/
 compose.yml
 compose.yml.legacy-disabled
+
+google-drive-apps-script.gs
