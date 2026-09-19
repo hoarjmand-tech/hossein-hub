@@ -4,6 +4,7 @@ from sqlalchemy import select
 from .core import SessionLocal,ARCHIVE_ROOT
 from .models import Document,DocumentVersion,DocumentIntakeItem
 from .services import extract_text
+from .document_preprocess import enhanced_tesseract
 from .document_intelligence import classify,canonical_filename
 
 DOCS=ARCHIVE_ROOT/"documents"
@@ -26,6 +27,9 @@ with SessionLocal() as db:
   p=DOCS/v.stored_name
   if not p.exists():continue
   text=extract_text(p,v.mime_type) or v.ocr_text or ""
+  if p.suffix.lower() in (".jpg",".jpeg",".png",".webp",".tif",".tiff"):
+   improved=enhanced_tesseract(p)
+   if len(improved.strip())>len(text.strip()): text=improved
   meta=classify(text,item.original_name or v.original_name or "")
   conf=meta.get("confidence") or quality(text)
   proposed=canonical_filename(meta,p.suffix.lower() or Path(v.original_name or "").suffix.lower())
