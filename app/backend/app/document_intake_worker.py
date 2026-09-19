@@ -31,6 +31,8 @@ def source_state(db,name):
 
 def handle(db,source,p):
  st=source_state(db,source);st.items_seen+=1
+ already=db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.source==source,DocumentIntakeItem.source_key==str(p),DocumentIntakeItem.status.in_(["imported","duplicate"])))
+ if already:return
  mime=detected_mime(p)
  if mime not in ALLOWED:
   q=DocumentIntakeItem(source=source,source_key=str(p),original_name=p.name,sha256="",status="rejected",error="unsupported file type",processed_at=datetime.utcnow())
@@ -42,11 +44,15 @@ def handle(db,source,p):
   st.duplicates_ignored+=1
   db.add(DocumentIntakeItem(source=source,source_key=str(p),original_name=p.name,sha256=sh,status="duplicate",document_id=prior.document_id,processed_at=datetime.utcnow()))
   db.add(Audit(action="document.intake.duplicate_ignored",object_type="document",object_id=prior.document_id,detail=f"{source}:{p.name}"))
-  db.commit();p.unlink(missing_ok=True);return
+  db.commit()
+  if source!="google_drive":p.unlink(missing_ok=True)
+  return
 
  existing=db.scalar(select(DocumentIntakeItem).where(DocumentIntakeItem.sha256==sh,DocumentIntakeItem.status=="imported"))
  if existing:
-  st.duplicates_ignored+=1;db.commit();p.unlink(missing_ok=True);return
+  st.duplicates_ignored+=1;db.commit()
+  if source!="google_drive":p.unlink(missing_ok=True)
+  return
 
  text=""
  try:text=extract_text(p,mime) or ""
@@ -63,7 +69,11 @@ def handle(db,source,p):
  db.add(d);db.flush()
  stored=f"{d.id}/v1-{uuid.uuid4()}{ext}"
  dest=DOCS/stored;dest.parent.mkdir(parents=True,exist_ok=True)
- shutil.move(str(p),str(dest))
+ if source=="google_drive":
+  try:os.link(p,dest)
+  except Exception:shutil.copy2(str(p),str(dest))
+ else:
+  shutil.move(str(p),str(dest))
  v=DocumentVersion(document_id=d.id,version=1,kind="original",original_name=canonical,stored_name=stored,mime_type=mime,size=dest.stat().st_size,sha256=sh,ocr_status="done" if text else "pending",ocr_text=text or None)
  db.add(v);db.flush()
  try:thumbnail(dest,mime,PREV/f"{v.id}.jpg")
