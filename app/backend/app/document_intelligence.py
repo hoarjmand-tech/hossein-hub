@@ -21,6 +21,7 @@ RULES=[
  ("invoice","invoice",["invoice","rechnung","faktura","فاکتور"]),
  ("contract","contract",["vertrag","agreement","contract","قرارداد"]),
  ("legal","court",["gericht","court","دادگاه","beschluss","urteil"]),
+]
 
 COUNTRIES={
  "austria":["austria","österreich","اتریش"],
