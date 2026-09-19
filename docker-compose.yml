@@ -260,8 +260,10 @@ services:
     container_name: hossein-hub-drive-sync
     restart: unless-stopped
     profiles: ["drive"]
+    secrets: [rclone_config_pass]
     entrypoint: ["/bin/sh","-c"]
     command: >
+      export RCLONE_CONFIG_PASS="$(cat /run/secrets/rclone_config_pass)";
       while true; do
         rclone copy hossein-drive: /archive/drive-inbox
         --config /config/rclone/rclone.conf
@@ -315,6 +317,8 @@ secrets:
     file: ./secrets/telegram_bot_token
   telegram_admin_id:
     file: ./secrets/telegram_admin_id
+  rclone_config_pass:
+    file: ./secrets/rclone_config_pass
 networks:
   hub-backend:
     external: true
