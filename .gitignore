@@ -1,6 +1,21 @@
-secrets/
+# Archive data
+archive/
 archive_data/
-data/
-.env
+
+# Backups
+backups/
+
+# Temporary files
+*.zip
+*.tar.gz
+*.enc
+*.backup
+*.before-*
+
+# Docker
+postgres/
+
+# Runtime
+*.log
 __pycache__/
 *.pyc
