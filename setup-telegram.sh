@@ -7,8 +7,16 @@ USERS="${2:-}"
 MINI_URL="${3:-}"
 
 if [[ -z "$TOKEN" ]]; then
-  echo "Usage: sudo bash setup-telegram.sh BOT_TOKEN [TELEGRAM_USER_ID[,ID...]] [HTTPS_MINI_APP_URL]"
-  exit 1
+  read -rsp "Telegram Bot Token: " TOKEN
+  echo
+fi
+[[ -n "$TOKEN" ]] || { echo "Bot token is required."; exit 1; }
+
+if [[ -z "$USERS" ]]; then
+  read -rp "Allowed Telegram User ID(s), comma-separated [keep current]: " USERS
+fi
+if [[ -z "$MINI_URL" ]]; then
+  read -rp "Public HTTPS Mini App URL [keep current]: " MINI_URL
 fi
 
 cd "$PROJECT"
@@ -21,8 +29,9 @@ from pathlib import Path
 path=Path(sys.argv[1])
 values={
     "TELEGRAM_BOT_TOKEN":sys.argv[2],
-    "TELEGRAM_ALLOWED_USERS":sys.argv[3],
 }
+if sys.argv[3]:
+    values["TELEGRAM_ALLOWED_USERS"]=sys.argv[3]
 if sys.argv[4]:
     values["TELEGRAM_MINI_APP_URL"]=sys.argv[4]
 lines=path.read_text(encoding="utf-8").splitlines() if path.exists() else []
