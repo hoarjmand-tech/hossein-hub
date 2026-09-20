@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+<title>آرشیو هوشمند</title>
+<style>
+:root{
+ --bg:var(--tg-theme-bg-color,#f4f6fa);--card:var(--tg-theme-secondary-bg-color,#fff);
+ --text:var(--tg-theme-text-color,#172033);--hint:var(--tg-theme-hint-color,#758097);
+ --link:var(--tg-theme-link-color,#2678ef);--button:var(--tg-theme-button-color,#2678ef);
+ --button-text:var(--tg-theme-button-text-color,#fff);--line:color-mix(in srgb,var(--hint) 22%,transparent);
+ --danger:#d84b59;--good:#13966d;--warn:#b97800
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,sans-serif}
+body{padding:env(safe-area-inset-top) 0 calc(74px + env(safe-area-inset-bottom));font-size:14px}
+button,input,select,textarea{font:inherit}.hidden{display:none!important}button{cursor:pointer}
+.app{max-width:720px;margin:auto}.head{padding:14px 14px 8px;display:flex;align-items:center;gap:10px}
+.avatar{width:42px;height:42px;border-radius:50%;object-fit:cover;background:linear-gradient(145deg,#397df4,#20aa7b);display:grid;place-items:center;color:white;font-weight:800}
+.head h1{font-size:16px;margin:0}.head p{font-size:11px;color:var(--hint);margin:3px 0 0}.head .refresh{margin-right:auto}
+.iconbtn{width:38px;height:38px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:12px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:6px 12px 11px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 7px;text-align:center}.stat b{display:block;font-size:16px}.stat span{font-size:9px;color:var(--hint)}
+.searchbar{padding:0 12px 8px;display:flex;gap:7px}.searchbar input{flex:1;height:42px;border:1px solid var(--line);border-radius:13px;background:var(--card);color:var(--text);padding:0 13px;outline:none}
+.filters{display:flex;gap:6px;overflow:auto;padding:0 12px 10px;scrollbar-width:none}.chip{white-space:nowrap;border:1px solid var(--line);background:var(--card);color:var(--hint);border-radius:999px;padding:6px 10px;font-size:11px}.chip.active{background:var(--button);border-color:var(--button);color:var(--button-text)}
+.section-title{padding:3px 14px 8px;display:flex;justify-content:space-between;color:var(--hint);font-size:11px}.doclist{padding:0 10px 10px}
+.doc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:9px;margin-bottom:8px;display:grid;grid-template-columns:66px minmax(0,1fr) 24px;gap:10px;align-items:center}
+.thumb{width:66px;height:78px;border-radius:9px;background:color-mix(in srgb,var(--hint) 12%,var(--card));overflow:hidden;display:grid;place-items:center;color:var(--hint);font-size:10px}.thumb img{width:100%;height:100%;object-fit:cover;object-position:top}
+.doc h3{font-size:13px;margin:0 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.filename{direction:auto;color:var(--hint);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:flex;gap:5px;align-items:center;margin-top:7px;flex-wrap:wrap}.badge{font-size:9px;padding:3px 6px;border-radius:999px;background:color-mix(in srgb,var(--hint) 12%,transparent);color:var(--hint)}.ok{color:var(--good)}.pending{color:var(--warn)}.failed{color:var(--danger)}
+.more{color:var(--hint);font-size:20px;text-align:center}.empty{text-align:center;color:var(--hint);padding:50px 25px;line-height:2}.empty b{display:block;color:var(--text);font-size:15px}
+.primary,.secondary,.danger{border:0;border-radius:11px;padding:10px 12px;font-weight:700}.primary{background:var(--button);color:var(--button-text)}.secondary{background:var(--card);color:var(--text);border:1px solid var(--line)}.danger{background:color-mix(in srgb,var(--danger) 12%,var(--card));color:var(--danger)}
+.upload{margin:8px 12px;background:var(--card);border:2px dashed var(--line);border-radius:18px;padding:38px 20px;text-align:center}.upload .up{font-size:36px}.upload p{color:var(--hint);font-size:11px;line-height:1.9}.upload-list{padding:5px 13px}.upload-row{background:var(--card);padding:10px;border-radius:11px;margin:6px 0;font-size:11px}.bar{height:5px;background:var(--line);border-radius:9px;overflow:hidden;margin-top:7px}.bar i{height:100%;display:block;background:var(--button);width:0;transition:.2s}
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 12px}.status-card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px}.status-card b{display:block;margin-bottom:5px}.status-card span{font-size:11px;color:var(--hint)}
+.activity{padding:5px 12px}.activity-row{padding:11px 2px;border-bottom:1px solid var(--line)}.activity-row b{font-size:12px}.activity-row small{display:block;color:var(--hint);font-size:9px;margin-top:4px}
+.nav{position:fixed;z-index:30;bottom:0;left:0;right:0;height:calc(64px + env(safe-area-inset-bottom));padding:5px max(10px,env(safe-area-inset-right)) env(safe-area-inset-bottom);background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(15px);border-top:1px solid var(--line);display:flex;justify-content:center;gap:4px}
+.nav button{width:min(30%,160px);border:0;background:transparent;color:var(--hint);border-radius:12px;font-size:10px}.nav button b{display:block;font-size:19px;margin-bottom:2px}.nav button.active{color:var(--button)}
+.shade{position:fixed;z-index:50;inset:0;background:#0007;display:flex;align-items:flex-end}.sheet{width:100%;max-width:720px;margin:auto;background:var(--bg);border-radius:22px 22px 0 0;max-height:94vh;overflow:auto;padding-bottom:calc(18px + env(safe-area-inset-bottom))}
+.sheet-head{position:sticky;top:0;z-index:2;background:color-mix(in srgb,var(--bg) 95%,transparent);backdrop-filter:blur(10px);padding:11px 14px;display:flex;align-items:center;border-bottom:1px solid var(--line)}.sheet-head h2{font-size:14px;margin:0}.sheet-head button{margin-right:auto}
+.preview{width:150px;height:190px;margin:13px auto 8px;border-radius:12px;border:1px solid var(--line);background:var(--card);display:grid;place-items:center;overflow:hidden;color:var(--hint)}.preview img{width:100%;height:100%;object-fit:contain}
+.owner{text-align:center;font-size:11px;color:var(--hint);padding:0 12px 10px}.owner b{color:var(--text)}
+.smart{margin:8px 13px;padding:11px;background:color-mix(in srgb,var(--button) 10%,var(--card));border:1px solid color-mix(in srgb,var(--button) 25%,var(--line));border-radius:12px;font-size:11px;word-break:break-word}.smart b{display:block;margin-bottom:5px}
+.form{padding:7px 13px}.field{margin-bottom:9px}.field label{display:block;color:var(--hint);font-size:10px;margin-bottom:5px}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--text);padding:10px;outline:none}.field textarea{min-height:70px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:5px 13px}.actions .wide{grid-column:1/-1}
+.ocr{margin:10px 13px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;max-height:150px;overflow:auto;white-space:pre-wrap;direction:auto;font-size:10px;line-height:1.8}
+.toast{position:fixed;z-index:90;left:50%;bottom:85px;transform:translateX(-50%);background:#101827;color:#fff;padding:10px 14px;border-radius:12px;font-size:11px;box-shadow:0 10px 30px #0005;max-width:88%;text-align:center}
+.loader{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--button);border-radius:50%;animation:spin .8s linear infinite;margin:70px auto}@keyframes spin{to{transform:rotate(360deg)}}
+.error{margin:25px 14px;padding:18px;background:var(--card);border:1px solid color-mix(in srgb,var(--danger) 35%,var(--line));border-radius:15px;text-align:center;line-height:1.9}.error b{color:var(--danger)}
+</style>
+</head>
+<body>
+<main id="app" class="app"><div class="loader"></div></main>
+<nav id="nav" class="nav hidden">
+ <button class="active" data-view="docs" onclick="showView('docs',this)"><b>▤</b>اسناد</button>
+ <button data-view="upload" onclick="showView('upload',this)"><b>＋</b>افزودن</button>
+ <button data-view="status" onclick="showView('status',this)"><b>◉</b>وضعیت</button>
+</nav>
+<div id="detail" class="shade hidden" onclick="if(event.target===this)closeDetail()">
+ <section class="sheet">
+  <div class="sheet-head"><h2>مشاهده و ویرایش سند</h2><button class="iconbtn" onclick="closeDetail()">✕</button></div>
+  <div class="preview" onclick="downloadCurrent(false)"><img id="dPreview" alt="پیش‌نمایش"><span id="dPreviewEmpty">پیش‌نمایش</span></div>
+  <div id="dOwner" class="owner"></div><div id="dSmart"></div>
+  <div class="form">
+   <div class="field"><label>عنوان سند</label><input id="dTitle"></div>
+   <div class="field"><label>نام فایل</label><input id="dFilename" dir="auto"></div>
+   <div class="row"><div class="field"><label>دسته</label><select id="dCategory"></select></div><div class="field"><label>برچسب‌ها</label><input id="dTags"></div></div>
+   <div class="field"><label>یادداشت</label><textarea id="dNotes"></textarea></div>
+  </div>
+  <div class="actions">
+   <button class="primary wide" onclick="saveCurrent()">ذخیره تغییرات</button>
+   <button class="secondary" onclick="retryCurrent()">OCR و نام‌گذاری</button><button class="secondary" onclick="downloadCurrent(true)">دانلود</button>
+   <button class="secondary" onclick="shareCurrent()">ساخت لینک اشتراک</button><button id="favBtn" class="secondary" onclick="favoriteCurrent()">★ علاقه‌مندی</button>
+   <button id="trashBtn" class="danger wide" onclick="trashCurrent()">انتقال به سطل زباله</button>
+  </div>
+  <details><summary style="margin:10px 14px;color:var(--hint);font-size:11px">متن استخراج‌شده OCR</summary><div id="dOcr" class="ocr"></div></details>
+ </section>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script>
+const tg=window.Telegram?.WebApp;
+if(tg){tg.ready();tg.expand();try{tg.setHeaderColor('secondary_bg_color');tg.setBackgroundColor('bg_color')}catch(e){}}
+const initData=tg?.initData||'';
+const state={user:null,stats:null,categories:[],docs:[],current:null,scope:'all',q:'',view:'docs',thumbUrls:[],detailUrl:null,timer:null};
+const $=id=>document.getElementById(id),app=$('app');
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function haptic(type='light'){try{tg?.HapticFeedback?.impactOccurred(type)}catch(e){}}
+function toast(text){const el=$('toast');el.textContent=text;el.classList.remove('hidden');clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>el.classList.add('hidden'),2600)}
+window.addEventListener('unhandledrejection',event=>{toast(event.reason?.message||'عملیات ناموفق بود');event.preventDefault()});
+async function api(path,opt={}){opt.headers={...(opt.headers||{}),'X-Telegram-Init-Data':initData};const r=await fetch('/api/telegram'+path,opt);let d=null;try{d=await r.json()}catch(e){}if(!r.ok)throw new Error(d?.detail||'خطای ارتباط با سرور');return d}
+function fmtSize(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(0)+' KB';return (n/1048576).toFixed(1)+' MB'}
+function fmtDate(x){try{return new Intl.DateTimeFormat('fa-IR',{month:'short',day:'numeric',year:'numeric'}).format(new Date(x))}catch(e){return ''}}
+function catName(id){return state.categories.find(x=>x.id===id)?.name||'بدون دسته'}
+function ocrLabel(v){return {done:'آماده',pending:'در صف',processing:'درحال پردازش',failed:'خطا',empty:'بدون متن'}[v]||v}
+async function boot(){
+ if(!initData){app.innerHTML='<div class="error"><b>این صفحه باید از داخل Telegram باز شود.</b><br>وارد گفت‌وگو با بات شوید و دکمه «بازکردن آرشیو» را بزنید.</div>';return}
+ try{
+  const [me,cats,stats]=await Promise.all([api('/me'),api('/categories'),api('/stats')]);state.user=me.user;state.categories=cats.items;state.stats=stats;
+  $('nav').classList.remove('hidden');await renderDocs();
+ }catch(e){app.innerHTML='<div class="error"><b>دسترسی Mini App برقرار نشد</b><br>'+esc(e.message)+'<br><small>توکن بات، User ID و آدرس HTTPS را بررسی کنید.</small></div>'}
+}
+function header(){const u=state.user||{};return '<header class="head">'+(u.photo_url?'<img class="avatar" src="'+esc(u.photo_url)+'">':'<div class="avatar">HA</div>')+'<div><h1>آرشیو هوشمند</h1><p>'+esc([u.first_name,u.last_name].filter(Boolean).join(' ')||'Telegram Mini App')+'</p></div><button class="iconbtn refresh" onclick="refreshCurrent()">↻</button></header>'}
+function statsHtml(){const s=state.stats||{};return '<div class="stats"><div class="stat"><b>'+Number(s.documents||0)+'</b><span>اسناد</span></div><div class="stat"><b>'+Number(s.processing||0)+'</b><span>در حال OCR</span></div><div class="stat"><b>'+Number(s.favorites||0)+'</b><span>علاقه‌مندی</span></div><div class="stat"><b>'+fmtSize(Number(s.storage||0))+'</b><span>حجم</span></div></div>'}
+async function renderDocs(){state.view='docs';app.innerHTML=header()+statsHtml()+'<div class="searchbar"><input id="search" value="'+esc(state.q)+'" placeholder="جست‌وجو در نام و متن اسناد…" oninput="searchChanged(this.value)"><button class="iconbtn" onclick="loadDocs()">⌕</button></div><div class="filters"><button class="chip '+(state.scope==='all'?'active':'')+'" onclick="setScope(\'all\',this)">همه</button><button class="chip '+(state.scope==='favorites'?'active':'')+'" onclick="setScope(\'favorites\',this)">علاقه‌مندی</button><button class="chip '+(state.scope==='uncategorized'?'active':'')+'" onclick="setScope(\'uncategorized\',this)">بدون دسته</button><button class="chip '+(state.scope==='trash'?'active':'')+'" onclick="setScope(\'trash\',this)">سطل زباله</button></div><div class="section-title"><span>آخرین اسناد</span><span id="docCount">…</span></div><div id="docList" class="doclist"><div class="loader"></div></div>';await loadDocs()}
+function searchChanged(v){state.q=v;clearTimeout(state.timer);state.timer=setTimeout(loadDocs,350)}
+function setScope(v,btn){state.scope=v;document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));btn.classList.add('active');loadDocs()}
+async function loadDocs(){
+ try{const d=await api('/documents?scope='+encodeURIComponent(state.scope)+'&q='+encodeURIComponent(state.q));state.docs=d.items||[];$('docCount').textContent=state.docs.length+' سند';renderList()}catch(e){$('docList').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+}
+function renderList(){state.thumbUrls.forEach(URL.revokeObjectURL);state.thumbUrls=[];const box=$('docList');if(!state.docs.length){box.innerHTML='<div class="empty"><b>سندی پیدا نشد</b>فایل اضافه کنید یا عبارت دیگری جست‌وجو کنید.</div>';return}box.innerHTML=state.docs.map(d=>'<article class="doc" onclick="openDoc(\''+d.id+'\')"><div class="thumb" id="th-'+d.id+'">'+(d.mime==='application/pdf'?'PDF':'IMG')+'</div><div><h3>'+esc(d.title)+'</h3><div class="filename">'+esc(d.original_name)+'</div><div class="meta"><span class="badge">'+esc(catName(d.category))+'</span><span class="badge '+(d.ocr_status==='done'?'ok':d.ocr_status==='failed'?'failed':'pending')+'">'+esc(ocrLabel(d.ocr_status))+'</span><span class="badge">'+fmtDate(d.created_at)+'</span></div></div><div class="more">‹</div></article>').join('');state.docs.slice(0,30).forEach(d=>loadThumb(d.id,'th-'+d.id))}
+async function loadThumb(id,target){try{const r=await fetch('/api/telegram/documents/'+id+'/preview',{headers:{'X-Telegram-Init-Data':initData}});if(!r.ok)return;const url=URL.createObjectURL(await r.blob());state.thumbUrls.push(url);const el=$(target);if(el)el.innerHTML='<img src="'+url+'" alt="">'}catch(e){}}
+function showView(view,btn){document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x===btn));if(view==='docs')renderDocs();if(view==='upload')renderUpload();if(view==='status')renderStatus();haptic()}
+function renderUpload(){state.view='upload';app.innerHTML=header()+'<div class="upload" onclick="$(\'fileInput\').click()"><div class="up">⇧</div><b>افزودن سند</b><p>PDF یا تصویر را انتخاب کنید.<br>فایل مستقیماً وارد OCR و نام‌گذاری هوشمند می‌شود.</p><button class="primary">انتخاب فایل</button><input id="fileInput" class="hidden" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" onchange="uploadFiles(this.files)"></div><div id="uploadList" class="upload-list"></div>'}
+async function uploadFiles(files){for(const file of [...files]){const id='up'+Math.random().toString(36).slice(2);$('uploadList').insertAdjacentHTML('beforeend','<div class="upload-row"><span>'+esc(file.name)+'</span><span id="'+id+'t" style="float:left">0%</span><div class="bar"><i id="'+id+'b"></i></div></div>');try{await uploadOne(file,id);$(id+'t').textContent='انجام شد';haptic('medium')}catch(e){$(id+'t').textContent='خطا';toast(e.message)}}state.stats=await api('/stats');setTimeout(()=>{document.querySelector('.nav button[data-view="docs"]').click()},700)}
+function uploadOne(file,id){return new Promise((resolve,reject)=>{const x=new XMLHttpRequest(),fd=new FormData();fd.append('files',file);x.open('POST','/api/telegram/documents/upload');x.setRequestHeader('X-Telegram-Init-Data',initData);x.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded/e.total*100);$(id+'t').textContent=p+'%';$(id+'b').style.width=p+'%'}};x.onload=()=>x.status<300?resolve():reject(new Error('آپلود ناموفق بود'));x.onerror=()=>reject(new Error('ارتباط قطع شد'));x.send(fd)})}
+async function renderStatus(){state.view='status';try{const [s,a]=await Promise.all([api('/stats'),api('/activity?limit=30')]);state.stats=s;app.innerHTML=header()+statsHtml()+'<div class="status-grid"><div class="status-card"><b>OCR</b><span>'+s.processing+' در صف · '+s.failed+' خطا</span></div><div class="status-card"><b>ورودی‌ها</b><span>'+s.scanner+' اسکنر · '+s.telegram+' تلگرام</span></div><div class="status-card"><b>اشتراک</b><span>'+s.shares+' لینک فعال</span></div><div class="status-card"><b>سطل زباله</b><span>'+s.trash+' سند</span></div></div><div class="section-title"><span>آخرین فعالیت‌ها</span></div><div class="activity">'+((a.items||[]).map(x=>'<div class="activity-row"><b>'+esc(activityName(x.action))+'</b><small>'+esc(x.details||x.source)+' · '+fmtDate(x.created_at)+'</small></div>').join('')||'<div class="empty">فعالیتی ثبت نشده است.</div>')+'</div>'}catch(e){toast(e.message)}}
+function activityName(x){return {document_ingested:'ورود سند',document_updated:'ویرایش سند',document_auto_renamed:'نام‌گذاری خودکار',document_trashed:'حذف سند',document_restored:'بازیابی سند',telegram_mini_upload:'آپلود Mini App'}[x]||x}
+async function openDoc(id){try{const d=await api('/documents/'+id);state.current=d;let en={};try{en=JSON.parse(d.extracted_entities||'{}')}catch(e){}$('dTitle').value=d.title||'';$('dFilename').value=d.original_name||'';$('dTags').value=d.tags||'';$('dNotes').value=d.notes||'';$('dOcr').textContent=d.ocr_text||'متنی استخراج نشده است';$('dOwner').innerHTML='صاحب سند: <b>'+esc(en.person_name||'تشخیص داده نشد')+'</b>';$('dCategory').innerHTML=state.categories.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===d.category?'selected':'')+'>'+esc(x.name)+'</option>').join('');$('favBtn').textContent=d.favorite?'★ حذف از علاقه‌مندی':'☆ علاقه‌مندی';$('trashBtn').textContent=d.deleted?'بازیابی از سطل زباله':'انتقال به سطل زباله';$('dSmart').innerHTML=d.smart_filename&&d.smart_filename!==d.original_name?'<div class="smart"><b>نام پیشنهادی OCR</b><span dir="auto">'+esc(d.smart_filename)+'</span><br><button class="primary" style="margin-top:8px" onclick="applySmartName()">اعمال نام پیشنهادی</button></div>':'';$('detail').classList.remove('hidden');tg?.BackButton?.show();loadDetailPreview(id);haptic()}catch(e){toast(e.message)}}
+async function loadDetailPreview(id){if(state.detailUrl)URL.revokeObjectURL(state.detailUrl);$('dPreview').classList.add('hidden');$('dPreviewEmpty').classList.remove('hidden');try{const r=await fetch('/api/telegram/documents/'+id+'/preview',{headers:{'X-Telegram-Init-Data':initData}});if(!r.ok)return;state.detailUrl=URL.createObjectURL(await r.blob());$('dPreview').src=state.detailUrl;$('dPreview').classList.remove('hidden');$('dPreviewEmpty').classList.add('hidden')}catch(e){}}
+function closeDetail(){$('detail').classList.add('hidden');tg?.BackButton?.hide();state.current=null;if(state.detailUrl){URL.revokeObjectURL(state.detailUrl);state.detailUrl=null}}
+tg?.BackButton?.onClick(closeDetail);
+async function saveCurrent(){const d=state.current;if(!d)return;const filename=$('dFilename').value.trim();if(!filename){toast('نام فایل نمی‌تواند خالی باشد');return}await api('/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('dTitle').value.trim(),filename,category:$('dCategory').value,tags:$('dTags').value.trim(),notes:$('dNotes').value.trim()})});toast('تغییرات ذخیره شد');haptic('medium');closeDetail();refreshCurrent()}
+async function retryCurrent(){const id=state.current?.id;if(!id)return;await api('/documents/'+id+'/retry-ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto_rename:true})});toast('OCR و نام‌گذاری وارد صف شد');closeDetail();refreshCurrent()}
+async function applySmartName(){const id=state.current?.id;if(!id)return;await api('/documents/'+id+'/apply-smart-filename',{method:'POST'});toast('نام پیشنهادی اعمال شد');await openDoc(id)}
+async function favoriteCurrent(){const d=state.current;if(!d)return;await api('/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({favorite:!d.favorite})});d.favorite=!d.favorite;$('favBtn').textContent=d.favorite?'★ حذف از علاقه‌مندی':'☆ علاقه‌مندی';state.stats=await api('/stats');haptic()}
+async function trashCurrent(){const d=state.current;if(!d)return;if(d.deleted){await api('/documents/'+d.id+'/restore',{method:'POST'});toast('سند بازیابی شد')}else{const ok=confirm('سند به سطل زباله منتقل شود؟');if(!ok)return;await api('/documents/'+d.id,{method:'DELETE'});toast('سند به سطل زباله منتقل شد')}closeDetail();refreshCurrent()}
+async function shareCurrent(){const d=state.current;if(!d)return;const r=await api('/documents/'+d.id+'/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:7,max_downloads:0})});const url=r.share_url||location.origin+r.url;try{await navigator.clipboard.writeText(url);toast('لینک ۷ روزه کپی شد')}catch(e){prompt('لینک اشتراک:',url)}}
+async function downloadCurrent(download=true){const d=state.current;if(!d)return;toast('درحال آماده‌سازی فایل…');try{const r=await fetch('/api/telegram/documents/'+d.id+'/file?download='+(download?1:0),{headers:{'X-Telegram-Init-Data':initData}});if(!r.ok)throw new Error();const url=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=url;a.download=d.original_name||'document';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)}catch(e){toast('دریافت فایل ناموفق بود')}}
+async function refreshCurrent(){try{state.stats=await api('/stats');if(state.view==='docs')await renderDocs();else if(state.view==='status')await renderStatus();else renderUpload()}catch(e){toast(e.message)}}
+boot();
+</script>
+</body>
+</html>

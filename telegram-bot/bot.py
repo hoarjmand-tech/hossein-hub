@@ -9,6 +9,7 @@ import requests
 TOKEN=os.getenv("TELEGRAM_BOT_TOKEN","").strip()
 API=os.getenv("ARCHIVE_API","http://archive:8080").rstrip("/")
 PUBLIC_URL=os.getenv("PUBLIC_BASE_URL","http://192.168.1.35:8080").rstrip("/")
+MINI_APP_URL=(os.getenv("TELEGRAM_MINI_APP_URL","").strip() or f"{PUBLIC_URL}/telegram").rstrip("/")
 ALLOWED={x.strip() for x in os.getenv("TELEGRAM_ALLOWED_USERS","").split(",") if x.strip()}
 TG=f"https://api.telegram.org/bot{TOKEN}"
 FILE_API=f"https://api.telegram.org/file/bot{TOKEN}"
@@ -27,7 +28,34 @@ def send(chat_id,text,reply_markup=None):
 
 
 def keyboard():
-    return {"keyboard":[["📥 افزودن سند","🔎 جست‌وجو"],["📊 آمار","🌐 باز کردن آرشیو"]],"resize_keyboard":True}
+    rows=[]
+    if MINI_APP_URL.startswith("https://"):
+        rows.append([{"text":"📚 بازکردن Mini App","web_app":{"url":MINI_APP_URL}}])
+    rows.extend([["📥 افزودن سند","🔎 جست‌وجو"],["📊 آمار","🌐 باز کردن آرشیو"]])
+    return {"keyboard":rows,"resize_keyboard":True}
+
+
+def bot_api(method,payload):
+    result=requests.post(f"{TG}/{method}",json=payload,timeout=30).json()
+    if not result.get("ok"):
+        raise RuntimeError(f"Telegram {method} failed: {result.get('description','unknown error')}")
+    return result
+
+
+def setup_bot():
+    commands=[
+        {"command":"start","description":"شروع و نمایش منو"},
+        {"command":"app","description":"بازکردن آرشیو هوشمند"},
+        {"command":"search","description":"جست‌وجو در اسناد"},
+        {"command":"stats","description":"آمار آرشیو"},
+    ]
+    bot_api("setMyCommands",{"commands":commands})
+    if MINI_APP_URL.startswith("https://"):
+        menu={"type":"web_app","text":"آرشیو هوشمند","web_app":{"url":MINI_APP_URL}}
+        bot_api("setChatMenuButton",{"menu_button":menu})
+        print(json.dumps({"event":"telegram_mini_app_registered","url":MINI_APP_URL},ensure_ascii=False),flush=True)
+    else:
+        print(json.dumps({"event":"telegram_mini_app_waiting_for_https","url":MINI_APP_URL},ensure_ascii=False),flush=True)
 
 
 def stats(chat_id):
@@ -97,11 +125,14 @@ def handle(message):
         return
     text=(message.get("text") or "").strip()
     if text in ("/start","/help"):
-        send(chat_id,"<b>بات آرشیو هوشمند حسین</b>\n\nفایل بفرستید یا از دستور /search عبارت استفاده کنید.",keyboard())
+        send(chat_id,"<b>بات آرشیو هوشمند حسین</b>\n\nMini App را باز کنید یا فایل را مستقیماً برای OCR ارسال کنید.",keyboard())
     elif text in ("/stats","📊 آمار"):
         stats(chat_id)
-    elif text in ("🌐 باز کردن آرشیو",):
-        send(chat_id,f"🌐 {PUBLIC_URL}")
+    elif text in ("🌐 باز کردن آرشیو","/app"):
+        if MINI_APP_URL.startswith("https://"):
+            send(chat_id,"📚 آرشیو کامل را داخل Telegram باز کنید:",{"inline_keyboard":[[{"text":"بازکردن آرشیو هوشمند","web_app":{"url":MINI_APP_URL}}]]})
+        else:
+            send(chat_id,"⚠️ آدرس HTTPS عمومی Mini App هنوز تنظیم نشده است.")
     elif text in ("📥 افزودن سند",):
         send(chat_id,"فایل PDF یا تصویر سند را همین‌جا ارسال کنید.")
     elif text in ("🔎 جست‌وجو",):
@@ -124,6 +155,7 @@ def main():
         while True:
             time.sleep(3600)
     offset=0
+    setup_bot()
     print("Telegram archive bot started",flush=True)
     while True:
         try:

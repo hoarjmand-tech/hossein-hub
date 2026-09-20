@@ -1,4 +1,4 @@
-# Hossein Hub Archive 4.3
+# Hossein Hub Archive 4.4
 
 سامانه ماژولار آرشیو هوشمند اسناد با قابلیت‌های زیر:
 
@@ -13,6 +13,7 @@
 - رابط جمع‌وجور و واکنش‌گرا، منوی مینی و تغییر امن نام فایل
 - پیش‌نمایش کوچک داخل قاب و نام‌گذاری خودکار فایل با OCR فارسی، آلمانی و انگلیسی
 - تشخیص صاحب سند از نام و نام خانوادگی فارسی، انگلیسی، آلمانی و MRZ گذرنامه
+- Telegram Mini App کامل برای جست‌وجو، آپلود، پیش‌نمایش، ویرایش، OCR، نام‌گذاری، دانلود و اشتراک
 - حفظ فایل اصلی و Migration خودکار دیتابیس
 
 ## Deploy
@@ -39,6 +40,21 @@ cd /opt/hossein-hub && git pull origin main && sudo bash deploy.sh
 ```bash
 sudo bash setup-telegram.sh BOT_TOKEN TELEGRAM_USER_ID
 ```
+
+برای Mini App باید یک آدرس عمومی HTTPS به مسیر `/telegram` متصل باشد و سپس
+آدرس کامل آن در `TELEGRAM_MINI_APP_URL` ثبت شود. نمونه:
+
+```bash
+sudo bash setup-telegram.sh BOT_TOKEN TELEGRAM_USER_ID https://archive.example.com/telegram
+```
+
+بات هنگام شروع، دکمه منوی Mini App را به‌صورت خودکار با Bot API ثبت می‌کند.
+درخواست‌های Mini App با امضای `Telegram.WebApp.initData` و فهرست User IDهای
+مجاز کنترل می‌شوند.
+
+برای انتشار امن، دامنه یا Cloudflare Tunnel را به پورت `8081` سرویس
+`telegram-gateway` متصل کنید؛ پورت `8080` فقط برای پنل داخلی شبکه است. Gateway
+تنها Mini App، API امضاشده Telegram و لینک‌های اشتراک توکنی را منتشر می‌کند.
 
 بررسی کامل سلامت سامانه:
 

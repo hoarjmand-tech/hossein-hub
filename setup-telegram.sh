@@ -4,21 +4,27 @@ set -Eeuo pipefail
 PROJECT="/opt/hossein-hub"
 TOKEN="${1:-}"
 USERS="${2:-}"
+MINI_URL="${3:-}"
 
 if [[ -z "$TOKEN" ]]; then
-  echo "Usage: sudo bash setup-telegram.sh BOT_TOKEN [TELEGRAM_USER_ID[,ID...]]"
+  echo "Usage: sudo bash setup-telegram.sh BOT_TOKEN [TELEGRAM_USER_ID[,ID...]] [HTTPS_MINI_APP_URL]"
   exit 1
 fi
 
 cd "$PROJECT"
 [[ -f .env ]] || cp .env.example .env
 
-python3 - "$PROJECT/.env" "$TOKEN" "$USERS" <<'PY'
+python3 - "$PROJECT/.env" "$TOKEN" "$USERS" "$MINI_URL" <<'PY'
 import sys
 from pathlib import Path
 
 path=Path(sys.argv[1])
-values={"TELEGRAM_BOT_TOKEN":sys.argv[2],"TELEGRAM_ALLOWED_USERS":sys.argv[3]}
+values={
+    "TELEGRAM_BOT_TOKEN":sys.argv[2],
+    "TELEGRAM_ALLOWED_USERS":sys.argv[3],
+}
+if sys.argv[4]:
+    values["TELEGRAM_MINI_APP_URL"]=sys.argv[4]
 lines=path.read_text(encoding="utf-8").splitlines() if path.exists() else []
 seen=set();out=[]
 for line in lines:
@@ -33,6 +39,6 @@ path.write_text("\n".join(out).rstrip()+"\n",encoding="utf-8")
 PY
 
 chmod 600 .env
-docker compose up -d --force-recreate telegram-bot archive
+docker compose up -d --force-recreate archive telegram-gateway telegram-bot
 echo "Telegram module configured."
 docker compose logs --tail 30 telegram-bot

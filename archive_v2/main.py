@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import BinaryIO
+from urllib.parse import parse_qsl
 
 import magic
 from fastapi import Body, Cookie, FastAPI, File, Header, HTTPException, Request, Response, UploadFile
@@ -34,6 +35,9 @@ WEB=Path(__file__).parent/"web"
 MAX_UPLOAD=int(os.getenv("MAX_UPLOAD_MB","100"))*1024*1024
 PUBLIC_BASE_URL=os.getenv("PUBLIC_BASE_URL","").rstrip("/")
 COOKIE_SECURE=os.getenv("COOKIE_SECURE","false").lower()=="true"
+TELEGRAM_BOT_TOKEN=os.getenv("TELEGRAM_BOT_TOKEN","").strip()
+TELEGRAM_ALLOWED_USERS={x.strip() for x in os.getenv("TELEGRAM_ALLOWED_USERS","").split(",") if x.strip()}
+TELEGRAM_INIT_MAX_AGE=int(os.getenv("TELEGRAM_INIT_MAX_AGE","86400"))
 for p in (ROOT,FILES,TMP,PREV): p.mkdir(parents=True,exist_ok=True)
 
 def read_secret(path,env_name):
@@ -487,17 +491,22 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="4.3",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="4.4",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"4.3","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"4.4","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
     return (WEB/"index.html").read_text(encoding="utf-8")
+
+@app.get("/telegram",response_class=HTMLResponse)
+@app.get("/telegram/",response_class=HTMLResponse)
+def telegram_mini_app():
+    return (WEB/"telegram.html").read_text(encoding="utf-8")
 
 @app.get("/api/stats")
 def stats():
@@ -712,7 +721,7 @@ def system_status():
         last=con.execute("SELECT created_at,action,source,details FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
     usage=shutil.disk_usage(ROOT)
     return {
-        "version":"4.3",
+        "version":"4.4",
         "ocr":{"pending":pending,"failed":failed},
         "inbox":{"path":str(inbox),"queued":len(list(inbox.glob('*'))) if inbox.exists() else 0},
         "storage":{"total":usage.total,"used":usage.used,"free":usage.free},
@@ -864,6 +873,101 @@ def export_documents(payload:dict=Body(...)):
             used.add(candidate.lower())
             z.write(path,candidate)
     return FileResponse(out,media_type="application/zip",filename="Hossein-Archive-Export.zip",background=BackgroundTask(lambda:out.unlink(missing_ok=True)))
+
+def telegram_identity(request:Request):
+    init_data=request.headers.get("X-Telegram-Init-Data","")
+    if not TELEGRAM_BOT_TOKEN:
+        raise HTTPException(503,"Telegram Mini App is not configured")
+    if not init_data or len(init_data)>16384:
+        raise HTTPException(401,"Telegram authorization required")
+    fields=dict(parse_qsl(init_data,keep_blank_values=True,strict_parsing=False))
+    received_hash=fields.pop("hash","")
+    if not received_hash:
+        raise HTTPException(401,"Telegram signature is missing")
+    data_check="\n".join(f"{key}={fields[key]}" for key in sorted(fields))
+    secret=hmac.new(b"WebAppData",TELEGRAM_BOT_TOKEN.encode(),hashlib.sha256).digest()
+    calculated=hmac.new(secret,data_check.encode(),hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calculated,received_hash):
+        raise HTTPException(401,"Invalid Telegram signature")
+    try:
+        auth_date=int(fields.get("auth_date","0"))
+    except ValueError:
+        raise HTTPException(401,"Invalid Telegram authorization date")
+    if auth_date<=0 or abs(int(time.time())-auth_date)>TELEGRAM_INIT_MAX_AGE:
+        raise HTTPException(401,"Telegram authorization expired")
+    try:
+        user=json.loads(fields.get("user","{}"))
+    except json.JSONDecodeError:
+        raise HTTPException(401,"Invalid Telegram user")
+    user_id=str(user.get("id", ""))
+    if not user_id:
+        raise HTTPException(401,"Telegram user is missing")
+    if TELEGRAM_ALLOWED_USERS and user_id not in TELEGRAM_ALLOWED_USERS:
+        raise HTTPException(403,"Telegram user is not allowed")
+    return user
+
+@app.get("/api/telegram/me")
+def telegram_me(request:Request):
+    return {"ok":True,"user":telegram_identity(request),"version":"4.4"}
+
+@app.get("/api/telegram/stats")
+def telegram_stats(request:Request):
+    telegram_identity(request);return stats()
+
+@app.get("/api/telegram/categories")
+def telegram_categories(request:Request):
+    telegram_identity(request);return categories()
+
+@app.get("/api/telegram/activity")
+def telegram_activity(request:Request,limit:int=30):
+    telegram_identity(request);return activity(limit)
+
+@app.get("/api/telegram/documents")
+def telegram_documents(request:Request,q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest"):
+    telegram_identity(request);return documents(q,category,source,ocr,days,scope,sort)
+
+@app.post("/api/telegram/documents/upload")
+def telegram_upload(request:Request,files:list[UploadFile]=File(...)):
+    user=telegram_identity(request)
+    results=[ingest_upload(file,"telegram") for file in files[:20]]
+    audit("telegram_mini_upload",source=str(user.get("id","")),details=f"{len(results)} files")
+    return {"ok":True,"items":results}
+
+@app.get("/api/telegram/documents/{did}")
+def telegram_document(request:Request,did:str):
+    telegram_identity(request);return document(did)
+
+@app.patch("/api/telegram/documents/{did}")
+def telegram_update_document(request:Request,did:str,payload:dict=Body(...)):
+    telegram_identity(request);return update_document(did,payload)
+
+@app.delete("/api/telegram/documents/{did}")
+def telegram_trash_document(request:Request,did:str):
+    telegram_identity(request);return trash_document(did)
+
+@app.post("/api/telegram/documents/{did}/restore")
+def telegram_restore_document(request:Request,did:str):
+    telegram_identity(request);return restore_document(did)
+
+@app.post("/api/telegram/documents/{did}/retry-ocr")
+def telegram_retry_ocr(request:Request,did:str,payload:dict=Body(default={})):
+    telegram_identity(request);return retry_ocr(did,payload)
+
+@app.post("/api/telegram/documents/{did}/apply-smart-filename")
+def telegram_apply_smart_filename(request:Request,did:str):
+    telegram_identity(request);return apply_smart_filename(did)
+
+@app.post("/api/telegram/documents/{did}/share")
+def telegram_create_share(request:Request,did:str,payload:dict=Body(default={})):
+    telegram_identity(request);return create_share(did,payload)
+
+@app.get("/api/telegram/documents/{did}/preview")
+def telegram_preview(request:Request,did:str):
+    telegram_identity(request);return preview(did)
+
+@app.get("/api/telegram/documents/{did}/file")
+def telegram_file(request:Request,did:str,download:int=0):
+    telegram_identity(request);return file_view(did,download)
 
 @app.get("/icon.svg")
 def icon():
