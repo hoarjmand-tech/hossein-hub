@@ -32,6 +32,17 @@ ISSUERS = [
     ("Finanzamt Österreich", ["finanzamt österreich", "finanzamt"]),
 ]
 
+COUNTRIES = [
+    ("IR", ["islamic republic of iran", "جمهوری اسلامی ایران", "iranian", "ایران"]),
+    ("AT", ["republik österreich", "österreich", "austria", "اتریش"]),
+    ("DE", ["bundesrepublik deutschland", "deutschland", "germany", "آلمان"]),
+    ("IT", ["repubblica italiana", "italia", "italy", "ایتالیا"]),
+    ("TR", ["türkiye cumhuriyeti", "türkiye", "turkey", "ترکیه"]),
+    ("AE", ["united arab emirates", "الإمارات العربية المتحدة", "امارات"]),
+    ("FR", ["république française", "france", "فرانسه"]),
+    ("CH", ["swiss confederation", "schweizerische eidgenossenschaft", "switzerland", "سوئیس"]),
+]
+
 DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
 
@@ -148,6 +159,14 @@ def extract_person_name(text):
     return ""
 
 
+def detect_country(text):
+    normalized=clean(text)
+    for code,keywords in COUNTRIES:
+        if any(keyword.lower() in normalized for keyword in keywords):
+            return code
+    return ""
+
+
 def analyze_document(text, original_name=""):
     normalized = clean(text)
     best = None
@@ -170,6 +189,7 @@ def analyze_document(text, original_name=""):
     date, date_found = extract_date(text)
     reference = extract_reference(text)
     person_name = extract_person_name(text)
+    country = detect_country(text)
     extension = Path(original_name or "").suffix.lower()
     if extension not in {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}:
         extension = ".pdf"
@@ -177,6 +197,8 @@ def analyze_document(text, original_name=""):
     filename_parts = [date, doc_type]
     if person_name:
         filename_parts.append(person_name)
+    if country:
+        filename_parts.append(country)
     if issuer and issuer.lower() not in doc_type.lower():
         filename_parts.append(issuer)
     if reference:
@@ -206,6 +228,7 @@ def analyze_document(text, original_name=""):
         "date": date if date_found else "",
         "reference": reference,
         "person_name": person_name,
+        "country": country,
         "keywords": found,
         "source_filename": original_name,
     }
@@ -214,6 +237,7 @@ def analyze_document(text, original_name=""):
         "suggested_title": suggested_title,
         "document_type": doc_type,
         "category": category,
+        "country": country,
         "description_fa": f"نوع سند: {doc_type}؛ صاحب احتمالی سند: {person_name or 'نامشخص'}؛ صادرکننده احتمالی: {issuer or 'نامشخص'}؛ تاریخ تشخیص‌داده‌شده: {date if date_found else 'نامشخص'}.",
         "description_de": f"Dokumenttyp: {doc_type}; möglicher Aussteller: {issuer or 'unbekannt'}.",
         "ai_confidence": confidence,

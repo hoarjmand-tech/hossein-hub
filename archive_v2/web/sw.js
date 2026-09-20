@@ -1,5 +1,5 @@
-const CACHE="hossein-archive-v4.4";
-const SHELL=["/","/manifest.webmanifest","/icon.svg"];
+const CACHE="hossein-archive-v4.5";
+const SHELL=["/","/manifest.webmanifest","/icon.svg","/font-persian-regular.ttf","/font-persian-bold.ttf"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener("fetch",e=>{

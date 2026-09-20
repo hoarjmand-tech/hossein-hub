@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1224">
 <link rel="manifest" href="/manifest.webmanifest">
-<title>Hossein Archive 4.4</title>
+<title>Hossein Archive 4.5</title>
 <style>
+@font-face{font-family:"Noto Sans Arabic";src:url('/font-persian-regular.ttf') format('truetype');font-weight:400;font-display:swap}
+@font-face{font-family:"Noto Sans Arabic";src:url('/font-persian-bold.ttf') format('truetype');font-weight:700 900;font-display:swap}
 :root{
  --bg:#f3f6fb;--card:#fff;--card2:#fafcff;--text:#172033;--muted:#748096;--line:#e4eaf2;
  --nav:#0b1224;--nav2:#15203a;--blue:#2868f0;--green:#119b70;--red:#cf3e4b;--amber:#a66b00;
@@ -17,7 +19,7 @@ html[data-theme="dark"]{
  --nav:#070c15;--nav2:#17243b;--soft:#1d2b41;--shadow:0 14px 35px rgba(0,0,0,.28)
 }
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;font-family:Tahoma,Arial,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+html,body{margin:0;min-height:100%;font-family:"Noto Sans Arabic",Tahoma,Arial,system-ui,sans-serif;background:var(--bg);color:var(--text)}
 body{transition:background .2s,color .2s}
 button,input,select,textarea{font:inherit}
 button{cursor:pointer}
@@ -122,7 +124,7 @@ html[data-theme="dark"] .suggest{background:#12342a;color:#99e5c9;border-color:#
 
 /* Compact professional workspace — v4.1 */
 :root{--r:13px;--shadow:0 8px 24px rgba(30,48,78,.07)}
-html,body{font-family:Vazirmatn,"Segoe UI",Tahoma,Arial,sans-serif;font-size:13px}
+html,body{font-family:"Noto Sans Arabic",Tahoma,Arial,sans-serif;font-size:13px}
 .shell{grid-template-columns:218px minmax(0,1fr);transition:grid-template-columns .2s ease}
 .sidebar{padding:13px 10px;background:linear-gradient(180deg,#111b31 0%,#09111f 100%);overflow-x:hidden}
 .brand{gap:9px;padding:3px 5px 14px;white-space:nowrap}
@@ -206,7 +208,7 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
  <div class="nav-group">مدیریت</div>
  <button class="navbtn" onclick="openSystem()" title="وضعیت و فعالیت‌ها"><span class="nav-icon">◉</span><span class="nav-label">وضعیت سامانه</span></button>
  <button class="navbtn" onclick="openUpload()" title="افزودن سند"><span class="nav-icon">＋</span><span class="nav-label">افزودن سند</span></button>
- <div class="side-note">نسخه 4.4 · سرور 192.168.1.35<br>OCR · Scanner · Telegram</div>
+ <div class="side-note">نسخه 4.5 · سرور 192.168.1.35<br>OCR · Scanner · Telegram</div>
 </aside>
 
 <main class="main">
@@ -231,6 +233,9 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
  <div class="toolbar">
   <div class="filters">
    <select id="category" onchange="loadDocs()"><option value="">همه دسته‌ها</option></select>
+   <select id="entityFilter" onchange="loadDocs()"><option value="">همه اشخاص و سازمان‌ها</option></select>
+   <select id="typeFilter" onchange="loadDocs()"><option value="">همه نوع‌های مدرک</option></select>
+   <select id="countryFilter" onchange="loadDocs()"><option value="">همه کشورها</option></select>
    <select id="source" onchange="loadDocs()"><option value="">همه منابع</option><option value="upload">آپلود مستقیم</option><option value="scanner_folder">اسکنر و پوشه ورودی</option><option value="telegram">Telegram</option><option value="google_drive">Google Drive</option></select>
    <select id="ocr" onchange="loadDocs()"><option value="">همه وضعیت‌های OCR</option><option value="done">آماده</option><option value="pending">در صف</option><option value="processing">در حال OCR</option><option value="empty">بدون متن</option><option value="failed">خطا</option></select>
    <select id="days" onchange="loadDocs()"><option value="">همه زمان‌ها</option><option value="1">۲۴ ساعت اخیر</option><option value="7">۷ روز اخیر</option><option value="30">۳۰ روز اخیر</option><option value="90">۹۰ روز اخیر</option><option value="365">یک سال اخیر</option></select>
@@ -281,8 +286,12 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
    <div class="form-grid">
     <div class="span2"><label>عنوان نمایشی سند</label><input id="eTitle" class="field" placeholder="عنوانی که در آرشیو دیده می‌شود"></div>
     <div class="span2"><label>نام فایل هنگام نمایش و دانلود</label><input id="eFilename" class="field" dir="auto" placeholder="مثلاً قرارداد شرکت.pdf"><small style="display:block;color:var(--muted);margin-top:5px">پسوند اصلی فایل به‌صورت خودکار حفظ می‌شود.</small></div>
+    <div class="span2"><label>نام پیشنهادی OCR (قابل ویرایش)</label><input id="eSmartFilename" class="field" dir="auto"></div>
     <div><label>دسته</label><select id="eCategory" class="field"></select></div>
     <div><label>برچسب‌ها</label><input id="eTags" class="field" placeholder="مثلاً اتریش، بیمه، قرارداد"></div>
+    <div><label>شخص / سازمان</label><select id="eEntity" class="field"></select><button class="smallbtn" style="margin-top:6px" type="button" onclick="openEntityModal()">＋ افزودن شخص یا سازمان</button></div>
+    <div><label>نوع مدرک</label><select id="eDocumentType" class="field"></select></div>
+    <div><label>کشور مورد استفاده</label><select id="eCountry" class="field"></select></div>
     <div class="span2"><label>یادداشت شخصی</label><textarea id="eNotes" class="field" placeholder="هر توضیحی که بعداً در جستجو هم پیدا شود…"></textarea></div>
    </div>
    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px"><button class="btn" onclick="closeModal('editModal')">انصراف</button><button class="btn primary" onclick="saveEdit()">ذخیره</button></div>
@@ -305,6 +314,8 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
    <div id="pSuggest"></div>
    <div id="pFilenameSuggest"></div>
    <div class="meta-block"><div class="meta-label">صاحب تشخیص‌داده‌شده سند</div><div id="pOwner">—</div></div>
+   <div class="meta-block"><div class="meta-label">پرونده شخص / سازمان</div><div id="pEntity">—</div></div>
+   <div class="meta-block"><div class="meta-label">نوع مدرک و کشور</div><div id="pTypeCountry">—</div></div>
    <div class="meta-block"><div class="meta-label">دسته</div><div id="pCategory"></div></div>
    <div class="meta-block"><div class="meta-label">وضعیت OCR</div><div id="pOcr"></div></div>
    <div class="meta-block"><div class="meta-label">برچسب‌ها</div><div id="pTags">—</div></div>
@@ -312,8 +323,8 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
    <div class="meta-block"><div class="meta-label">منبع</div><div id="pSource"></div></div>
    <div class="meta-block"><div class="meta-label">متن قابل جستجو</div><div id="pText" class="ocrbox">—</div><button class="smallbtn" style="margin-top:6px" onclick="copyOcr()">کپی متن OCR</button></div>
    <div class="meta-actions">
-    <button class="btn primary" onclick="openShareCurrent()">اشتراک‌گذاری</button>
     <button class="btn" onclick="editCurrent()">ویرایش</button>
+    <button class="btn primary" onclick="openShareCurrent()">اشتراک‌گذاری</button>
     <button class="btn" onclick="retryCurrent()">OCR و نام‌گذاری مجدد</button>
     <button class="btn" onclick="openCurrentNewTab()">نسخه کامل</button>
     <button class="btn" onclick="toggleCurrentFav()">★ علاقه‌مندی</button>
@@ -330,9 +341,22 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
     <div><label>مدت اعتبار لینک</label><select id="shareDays" class="field"><option value="1">۱ روز</option><option value="7" selected>۷ روز</option><option value="30">۳۰ روز</option><option value="90">۹۰ روز</option><option value="365">۱ سال</option></select></div>
     <div><label>حداکثر تعداد دانلود</label><input id="shareMax" class="field" type="number" min="0" max="10000" value="0" placeholder="۰ = نامحدود"></div>
    </div>
-   <button class="btn primary" style="margin-top:12px" onclick="createShare()">ساخت و کپی لینک</button>
+   <button class="btn primary" style="margin-top:12px" onclick="createShare(false)">ساخت و کپی لینک مشاهده</button>
+   <button class="btn" style="margin-top:12px" onclick="createShare(true)">ساخت و کپی لینک دانلود</button>
    <div id="shareList" style="margin-top:15px"></div>
   </div>
+ </div>
+</div>
+
+<div id="entityModal" class="modal hidden">
+ <div class="modal-card" style="max-width:560px">
+  <div class="modal-head"><h3>افزودن شخص یا سازمان</h3><button class="close" onclick="closeModal('entityModal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+   <div class="span2"><label>نام</label><input id="newEntityName" class="field" placeholder="نام شخص یا سازمان"></div>
+   <div><label>نوع پرونده</label><select id="newEntityKind" class="field"><option value="person">شخص</option><option value="organization">سازمان / شرکت</option><option value="other">سایر</option></select></div>
+   <div><label>کشور</label><select id="newEntityCountry" class="field"></select></div>
+   <div class="span2"><label>یادداشت</label><textarea id="newEntityNotes" class="field"></textarea></div>
+  </div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn" onclick="closeModal('entityModal')">انصراف</button><button class="btn primary" onclick="createEntity()">ذخیره پرونده</button></div></div>
  </div>
 </div>
 
@@ -350,7 +374,7 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
 <div id="toast" class="toast hidden"></div>
 
 <script>
-const state={scope:'all',docs:[],categories:[],current:null,timer:null,stats:null,view:localStorage.getItem('archiveView')||'list',selected:new Set(),tags:[]};
+const state={scope:'all',docs:[],categories:[],entities:[],documentTypes:[],countries:[],current:null,timer:null,stats:null,view:localStorage.getItem('archiveView')||'list',selected:new Set(),tags:[]};
 const $=id=>document.getElementById(id);
 const sidebar=$('sidebar'),fileInput=$('fileInput');
 function toggleMenu(){
@@ -374,6 +398,8 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.classList.remove('hid
 function fmtSize(n){n=Number(n)||0;if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB'}
 function fmtDate(s){try{return new Intl.DateTimeFormat('fa-IR',{year:'numeric',month:'short',day:'numeric'}).format(new Date(s))}catch(e){return s}}
 function catName(id){return state.categories.find(x=>x.id===id)?.name||id||'بدون دسته'}
+function countryName(id){return state.countries.find(x=>x.id===id)?.name||id||'—'}
+function entityKindName(kind){return ({person:'شخص',organization:'سازمان',other:'سایر'})[kind]||kind}
 function sourceName(id){return ({upload:'آپلود مستقیم',google_drive:'Google Drive',scanner_folder:'اسکنر',telegram:'Telegram'})[id]||id||'نامشخص'}
 function ocrBadge(s){const n={done:'آماده',pending:'در صف',processing:'در حال OCR',failed:'خطا',empty:'بدون متن'};return '<span class="badge '+esc(s)+'">'+esc(n[s]||s)+'</span>'}
 function closeModal(id){$(id).classList.add('hidden')}
@@ -382,8 +408,9 @@ function searchChanged(){saveRecentSearch();clearTimeout(state.timer);state.time
 
 async function boot(){
  applyTheme(localStorage.getItem('archiveTheme')||'light');
- const [c,t]=await Promise.all([api('/api/categories'),api('/api/tags')]);state.categories=c.items;state.tags=t.items;
+ const [c,t,e,dt,co]=await Promise.all([api('/api/categories'),api('/api/tags'),api('/api/entities'),api('/api/document-types'),api('/api/countries')]);state.categories=c.items;state.tags=t.items;state.entities=e.items;state.documentTypes=dt.items;state.countries=co.items;
  state.categories.forEach(x=>{['category','eCategory','bulkCategory'].forEach(id=>$(id).insertAdjacentHTML('beforeend','<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>'))});
+ renderMetadataOptions();
  renderChips();setView(state.view,false);await refreshAll();
  if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{})
 }
@@ -395,7 +422,7 @@ async function loadStats(){
 }
 async function loadDocs(){
  const u=new URL('/api/documents',location.origin);
- const vals={q:$('search').value.trim(),category:$('category').value,source:$('source').value,ocr:$('ocr').value,days:$('days').value,sort:$('sort').value,scope:state.scope};
+ const vals={q:$('search').value.trim(),category:$('category').value,entity_id:$('entityFilter').value,document_type:$('typeFilter').value,country:$('countryFilter').value,source:$('source').value,ocr:$('ocr').value,days:$('days').value,sort:$('sort').value,scope:state.scope};
  Object.entries(vals).forEach(([k,v])=>{if(v)u.searchParams.set(k,v)});
  const d=await api(u);state.docs=d.items;$('resultInfo').textContent=d.count+' سند'+(vals.q?' برای «'+vals.q+'»':'');syncSelection();render()
 }
@@ -412,7 +439,20 @@ async function openSystem(){
  $('activityList').innerHTML=a.items.length?a.items.map(x=>'<div class="activity-row"><b>'+esc(names[x.action]||x.action)+'</b> · '+esc(x.source)+'<small>'+esc(x.details||'')+' · '+fmtDate(x.created_at)+'</small></div>').join(''):'<div class="empty">هنوز فعالیتی ثبت نشده است.</div>';
  $('systemModal').classList.remove('hidden')
 }
-function clearFilters(){$('search').value='';$('category').value='';$('source').value='';$('ocr').value='';$('days').value='';$('sort').value='newest';loadDocs()}
+function clearFilters(){$('search').value='';['category','entityFilter','typeFilter','countryFilter','source','ocr','days'].forEach(id=>$(id).value='');$('sort').value='newest';loadDocs()}
+
+function renderMetadataOptions(){
+ const current={filter:$('entityFilter').value,edit:$('eEntity').value};
+ $('entityFilter').innerHTML='<option value="">همه اشخاص و سازمان‌ها</option>'+state.entities.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' ('+entityKindName(x.kind)+')</option>').join('');
+ $('eEntity').innerHTML='<option value="">بدون پرونده</option>'+state.entities.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+entityKindName(x.kind)+'</option>').join('');
+ $('entityFilter').value=current.filter;$('eEntity').value=current.edit;
+ $('typeFilter').innerHTML='<option value="">همه نوع‌های مدرک</option>'+state.documentTypes.map(x=>'<option>'+esc(x)+'</option>').join('');
+ $('eDocumentType').innerHTML='<option value="">انتخاب نشده</option>'+state.documentTypes.map(x=>'<option>'+esc(x)+'</option>').join('');
+ const countryOptions=state.countries.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join('');
+ $('countryFilter').innerHTML='<option value="">همه کشورها</option>'+countryOptions;$('eCountry').innerHTML='<option value="">انتخاب نشده</option>'+countryOptions;$('newEntityCountry').innerHTML='<option value="">انتخاب نشده</option>'+countryOptions;
+}
+function openEntityModal(){$('newEntityName').value='';$('newEntityKind').value='person';$('newEntityCountry').value=$('eCountry').value||'';$('newEntityNotes').value='';$('entityModal').classList.remove('hidden')}
+async function createEntity(){const name=$('newEntityName').value.trim();if(!name){toast('نام شخص یا سازمان را وارد کنید');return}const r=await api('/api/entities',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,kind:$('newEntityKind').value,country:$('newEntityCountry').value,notes:$('newEntityNotes').value.trim()})});const e=await api('/api/entities');state.entities=e.items;renderMetadataOptions();$('eEntity').value=r.item.id;closeModal('entityModal');toast('پرونده جدید ساخته شد')}
 function setView(v,re=true){state.view=v;localStorage.setItem('archiveView',v);$('vList').classList.toggle('active',v==='list');$('vGrid').classList.toggle('active',v==='grid');if(re)render()}
 function renderChips(){
  const recent=JSON.parse(localStorage.getItem('archiveRecentSearches')||'[]').slice(0,5);
@@ -436,14 +476,14 @@ function rowHtml(d){
  return '<div class="list-row"><div><input class="check" type="checkbox" '+checked+' onchange="toggleSelect(\''+d.id+'\',this.checked)"></div><div><div class="title" onclick="openDoc(\''+d.id+'\')">'+highlight(d.title,q)+'</div><div class="sub">'+esc(d.original_name)+' · '+esc(sourceName(d.source))+'</div>'+(d.snippet?'<div class="snippet">'+highlight(d.snippet,q)+'</div>':'')+'</div>'+
  '<div><span class="badge">'+esc(catName(d.category))+'</span></div><div>'+ocrBadge(d.ocr_status)+'</div><div>'+fmtSize(d.size)+'</div><div>'+fmtDate(d.created_at)+'</div><div class="actions">'+
  (trash?'<button class="smallbtn success" onclick="restoreDoc(\''+d.id+'\')">بازیابی</button><button class="smallbtn danger" onclick="permanentDelete(\''+d.id+'\')">حذف قطعی</button>':
- '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">باز</button><button class="smallbtn" onclick="quickEdit(\''+d.id+'\')">ویرایش</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button><button class="smallbtn danger" onclick="trashDoc(\''+d.id+'\')">حذف</button>')+'</div></div>'
+ '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">باز</button><button class="smallbtn" onclick="quickEdit(\''+d.id+'\')">ویرایش</button><button class="smallbtn" onclick="shareDoc(\''+d.id+'\')">اشتراک</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button><button class="smallbtn danger" onclick="trashDoc(\''+d.id+'\')">حذف</button>')+'</div></div>'
 }
 function cardHtml(d){
  const trash=state.scope==='trash',checked=state.selected.has(d.id)?'checked':'';
  const preview=d.has_preview?'<img loading="lazy" src="/api/documents/'+d.id+'/preview" alt="">':'<div class="fileicon">'+(d.mime==='application/pdf'?'PDF':'IMG')+'</div>';
  return '<article class="card"><label class="cardcheck"><input class="check" type="checkbox" '+checked+' onchange="toggleSelect(\''+d.id+'\',this.checked)"></label><div class="thumb" onclick="openDoc(\''+d.id+'\')">'+preview+'<span class="sourcechip">'+esc(sourceName(d.source))+'</span></div><div class="cardbody"><div class="cardtitle" onclick="openDoc(\''+d.id+'\')">'+highlight(d.title,$('search').value.trim())+'</div><div class="sub">'+esc(d.original_name)+'</div><div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap"><span class="badge">'+esc(catName(d.category))+'</span>'+ocrBadge(d.ocr_status)+'</div><div class="cardmeta"><span>'+fmtSize(d.size)+'</span><span>'+fmtDate(d.created_at)+'</span></div><div class="cardactions">'+
  (trash?'<button class="smallbtn success" onclick="restoreDoc(\''+d.id+'\')">بازیابی</button><button class="smallbtn danger" onclick="permanentDelete(\''+d.id+'\')">حذف قطعی</button>':
- '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">باز</button><button class="smallbtn" onclick="quickEdit(\''+d.id+'\')">ویرایش</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button>')+'</div></div></article>'
+ '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">باز</button><button class="smallbtn" onclick="quickEdit(\''+d.id+'\')">ویرایش</button><button class="smallbtn" onclick="shareDoc(\''+d.id+'\')">اشتراک</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button>')+'</div></div></article>'
 }
 
 function toggleSelect(id,on){on?state.selected.add(id):state.selected.delete(id);updateBulk()}
@@ -465,10 +505,10 @@ async function exportSelected(){
 async function openDoc(id){
  const d=await api('/api/documents/'+id);state.current=d;
  let entities={};try{entities=JSON.parse(d.extracted_entities||'{}')}catch(e){}
- $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pOwner').textContent=entities.person_name||'تشخیص داده نشد';$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
+ $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pOwner').textContent=entities.person_name||'تشخیص داده نشد';$('pEntity').textContent=d.entity_name||'بدون پرونده';$('pTypeCountry').textContent=[d.document_type||'نوع نامشخص',countryName(d.country)].join(' · ');$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
  const s=$('pSuggest');s.innerHTML=(d.suggested_title&&d.suggested_title!==d.title)?'<div class="suggest"><b>پیشنهاد عنوان</b><div>'+esc(d.suggested_title)+'</div><button class="btn success" style="margin-top:8px" onclick="applySuggestion()">اعمال پیشنهاد</button></div>':'';
  const fs=$('pFilenameSuggest');
- if(d.smart_filename&&d.smart_filename!==d.original_name){fs.innerHTML='<div class="filename-suggest"><b>نام پیشنهادی OCR</b><div dir="auto">'+esc(d.smart_filename)+'</div><small>بر اساس تاریخ، نوع سند، صادرکننده و شماره مرجع</small><button class="btn primary" style="margin-top:8px" onclick="applySmartFilename()">اعمال این نام</button></div>'}
+ if(d.smart_filename&&d.smart_filename!==d.original_name){fs.innerHTML='<div class="filename-suggest"><b>نام پیشنهادی OCR — قابل ویرایش</b><input id="pSmartFilename" class="field" dir="auto" value="'+esc(d.smart_filename)+'"><small>بر اساس تاریخ، نوع سند، صادرکننده و شماره مرجع</small><button class="btn primary" style="margin-top:8px" onclick="applySmartFilename()">اعمال این نام</button></div>'}
  else if(d.source_name&&d.source_name!==d.original_name){fs.innerHTML='<div class="suggest"><b>✓ نام‌گذاری خودکار انجام شد</b><div dir="auto">'+esc(d.original_name)+'</div><small>نام اولیه: '+esc(d.source_name)+'</small></div>'}
  else fs.innerHTML='';
  const image=$('previewImage'),fallback=$('previewFallback');image.classList.remove('hidden');fallback.classList.add('hidden');
@@ -477,10 +517,10 @@ async function openDoc(id){
 }
 function closePreview(){$('previewImage').removeAttribute('src');closeModal('previewModal')}
 async function applySuggestion(){await api('/api/documents/'+state.current.id+'/apply-suggestion',{method:'POST'});toast('عنوان پیشنهادی اعمال شد');closePreview();refreshAll()}
-async function applySmartFilename(){if(!state.current)return;const id=state.current.id;await api('/api/documents/'+id+'/apply-smart-filename',{method:'POST'});toast('نام پیشنهادی OCR اعمال شد');await openDoc(id);refreshAll()}
-function editCurrent(){const d=state.current;if(!d)return;closePreview();$('eTitle').value=d.title||'';$('eFilename').value=d.original_name||'';$('eCategory').value=d.category||'other';$('eTags').value=d.tags||'';$('eNotes').value=d.notes||'';$('editModal').classList.remove('hidden')}
+async function applySmartFilename(){if(!state.current)return;const id=state.current.id,filename=$('pSmartFilename')?.value.trim()||state.current.smart_filename;await api('/api/documents/'+id+'/apply-smart-filename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename})});toast('نام پیشنهادی OCR اعمال شد');await openDoc(id);refreshAll()}
+function editCurrent(){const d=state.current;if(!d)return;closePreview();$('eTitle').value=d.title||'';$('eFilename').value=d.original_name||'';$('eSmartFilename').value=d.smart_filename||d.original_name||'';$('eCategory').value=d.category||'other';$('eEntity').value=d.entity_id||'';$('eDocumentType').value=d.document_type||'';$('eCountry').value=d.country||'';$('eTags').value=d.tags||'';$('eNotes').value=d.notes||'';$('editModal').classList.remove('hidden')}
 async function quickEdit(id){state.current=await api('/api/documents/'+id);editCurrent()}
-async function saveEdit(){const d=state.current;if(!d)return;const filename=$('eFilename').value.trim();if(!filename){toast('نام فایل نمی‌تواند خالی باشد');return}await api('/api/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('eTitle').value.trim(),filename,category:$('eCategory').value,tags:$('eTags').value.trim(),notes:$('eNotes').value.trim()})});closeModal('editModal');toast('عنوان و نام فایل ذخیره شد');const t=await api('/api/tags');state.tags=t.items;renderChips();refreshAll()}
+async function saveEdit(){const d=state.current;if(!d)return;const filename=$('eFilename').value.trim();if(!filename){toast('نام فایل نمی‌تواند خالی باشد');return}await api('/api/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('eTitle').value.trim(),filename,smart_filename:$('eSmartFilename').value.trim(),category:$('eCategory').value,entity_id:$('eEntity').value,document_type:$('eDocumentType').value,country:$('eCountry').value,tags:$('eTags').value.trim(),notes:$('eNotes').value.trim()})});closeModal('editModal');toast('مشخصات سند ذخیره شد');const t=await api('/api/tags');state.tags=t.items;renderChips();refreshAll()}
 async function toggleFav(id,v){await api('/api/documents/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({favorite:!!v})});refreshAll()}
 async function toggleCurrentFav(){if(!state.current)return;await toggleFav(state.current.id,!state.current.favorite);state.current.favorite=!state.current.favorite;toast('علاقه‌مندی تغییر کرد')}
 async function retryCurrent(){if(!state.current)return;await api('/api/documents/'+state.current.id+'/retry-ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto_rename:true})});toast('OCR و نام‌گذاری خودکار وارد صف شد');closePreview();refreshAll()}
@@ -517,9 +557,9 @@ function openShareCurrent(){if(state.current){closePreview();$('shareModal').cla
 async function loadShares(){
  const d=await api('/api/documents/'+state.current.id+'/shares'),box=$('shareList');
  if(!d.items.length){box.innerHTML='<div class="empty" style="padding:25px">هنوز لینک اشتراکی ساخته نشده است.</div>';return}
- box.innerHTML=d.items.map(x=>{const url=(x.share_url&&x.share_url.startsWith('http'))?x.share_url:(location.origin+x.url),limit=x.max_downloads?x.downloads+' از '+x.max_downloads+' دانلود':x.downloads+' دانلود';return '<div class="share-row"><div class="share-top"><b>'+((x.expired||x.exhausted)?'غیرفعال':'فعال')+'</b><span>'+limit+'</span></div><div class="share-url">'+esc(url)+'</div><div style="display:flex;gap:7px;margin-top:8px"><button class="smallbtn" onclick="copyText(\''+esc(url)+'\')">کپی لینک</button><button class="smallbtn" onclick="shareNative(\''+esc(url)+'\')">Share</button><button class="smallbtn danger" onclick="revokeShare(\''+x.token+'\')">لغو</button></div></div>'}).join('')
+ box.innerHTML=d.items.map(x=>{const url=(x.share_url&&x.share_url.startsWith('http'))?x.share_url:(location.origin+x.url),download=(x.download_url&&x.download_url.startsWith('http'))?x.download_url:(location.origin+x.download_url),limit=x.max_downloads?x.downloads+' از '+x.max_downloads+' دانلود':x.downloads+' دانلود';return '<div class="share-row"><div class="share-top"><b>'+((x.expired||x.exhausted)?'غیرفعال':'فعال')+'</b><span>'+limit+'</span></div><div class="share-url">'+esc(url)+'</div><div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap"><button class="smallbtn" onclick="copyText(\''+esc(url)+'\')">کپی مشاهده</button><button class="smallbtn" onclick="copyText(\''+esc(download)+'\')">کپی دانلود</button><button class="smallbtn" onclick="shareNative(\''+esc(url)+'\')">Share</button><button class="smallbtn danger" onclick="revokeShare(\''+x.token+'\')">لغو</button></div></div>'}).join('')
 }
-async function createShare(){const d=await api('/api/documents/'+state.current.id+'/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:Number($('shareDays').value),max_downloads:Number($('shareMax').value)||0})});const url=(d.share_url&&d.share_url.startsWith('http'))?d.share_url:(location.origin+d.url);await copyText(url);toast('لینک ساخته و کپی شد');loadShares();loadStats()}
+async function createShare(download=false){const d=await api('/api/documents/'+state.current.id+'/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:Number($('shareDays').value),max_downloads:Number($('shareMax').value)||0})});const raw=download?d.download_url:(d.share_url||d.url),url=raw.startsWith('http')?raw:(location.origin+raw);await copyText(url);toast(download?'لینک دانلود ساخته و کپی شد':'لینک مشاهده ساخته و کپی شد');loadShares();loadStats()}
 async function revokeShare(token){await api('/api/shares/'+token,{method:'DELETE'});toast('لینک لغو شد');loadShares();loadStats()}
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast('کپی شد')}catch(e){prompt('کپی کنید:',t)}}
 async function shareNative(url){if(navigator.share){try{await navigator.share({title:state.current?.title||'Document',url})}catch(e){}}else copyText(url)}

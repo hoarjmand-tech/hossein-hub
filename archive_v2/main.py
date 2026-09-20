@@ -140,6 +140,8 @@ def init_db():
             "description_fa":"TEXT NOT NULL DEFAULT ''",
             "description_de":"TEXT NOT NULL DEFAULT ''",
             "document_type":"TEXT NOT NULL DEFAULT ''",
+            "entity_id":"TEXT NOT NULL DEFAULT ''",
+            "country":"TEXT NOT NULL DEFAULT ''",
             "ai_confidence":"REAL NOT NULL DEFAULT 0",
             "extracted_entities":"TEXT NOT NULL DEFAULT '{}'",
         }
@@ -151,6 +153,19 @@ def init_db():
         if "max_downloads" not in scols:
             con.execute("ALTER TABLE shares ADD COLUMN max_downloads INTEGER NOT NULL DEFAULT 0")
         con.executescript("""
+        CREATE TABLE IF NOT EXISTS entities(
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'person',
+          country TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_entities_name_kind ON entities(name COLLATE NOCASE,kind);
+        CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_id);
+        CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(document_type);
+        CREATE INDEX IF NOT EXISTS idx_documents_country ON documents(country);
         CREATE TABLE IF NOT EXISTS audit_events(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           action TEXT NOT NULL,
@@ -191,6 +206,19 @@ def audit(action,document_id=None,source="system",details=""):
             )
     except Exception as exc:
         print("audit:",exc,flush=True)
+
+def upsert_entity(name,kind="person",country=""):
+    name=re.sub(r"\s+"," ",str(name or "")).strip()[:160]
+    kind=kind if kind in ("person","organization","other") else "other"
+    if not name:return ""
+    with db() as con:
+        row=con.execute("SELECT id,country FROM entities WHERE name=? COLLATE NOCASE AND kind=?",(name,kind)).fetchone()
+        if row:
+            if country and not row["country"]:con.execute("UPDATE entities SET country=?,updated_at=? WHERE id=?",(country,now(),row["id"]))
+            return row["id"]
+        eid=str(uuid.uuid4());ts=now()
+        con.execute("INSERT INTO entities(id,name,kind,country,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",(eid,name,kind,country,"",ts,ts))
+        return eid
 
 def base_title(name):
     stem=Path(clean_filename(name)).stem
@@ -430,6 +458,12 @@ def process_one():
             title=suggested_title
         auto_rename=bool(text and analysis["document_type"]!="سند" and analysis["ai_confidence"]>=0.45 and not row["filename_locked"])
         display_name=analysis["smart_filename"] if auto_rename else row["original_name"]
+        detected=json.loads(analysis["extracted_entities"] or "{}")
+        entity_id=row["entity_id"]
+        if not entity_id and detected.get("person_name"):
+            entity_id=upsert_entity(detected["person_name"],"person",analysis.get("country", ""))
+        elif not entity_id and detected.get("issuer"):
+            entity_id=upsert_entity(detected["issuer"],"organization",analysis.get("country", ""))
         status="done" if text else "empty"
         with db() as con:
             con.execute("""UPDATE documents SET 
@@ -444,6 +478,8 @@ smart_filename=?,
 description_fa=?,
 description_de=?,
 document_type=?,
+entity_id=?,
+country=?,
 ai_confidence=?,
 extracted_entities=?,
 updated_at=?
@@ -460,6 +496,8 @@ WHERE id=?""",
                         analysis["description_fa"],
                         analysis["description_de"],
                         analysis["document_type"],
+                        entity_id,
+                        analysis.get("country", ""),
                         analysis["ai_confidence"],
                         analysis["extracted_entities"],
                         now(),
@@ -491,13 +529,13 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="4.4",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="4.5",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"4.4","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"4.5","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
@@ -525,13 +563,19 @@ def stats():
         }
 
 @app.get("/api/documents")
-def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest"):
+def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest",entity_id:str="",document_type:str="",country:str=""):
     where=["1=1"];args=[]
     where.append("deleted=?");args.append(1 if scope=="trash" else 0)
     if scope=="favorites":where.append("favorite=1")
     if scope=="uncategorized":where.append("category='other'")
     if category:
         where.append("category=?");args.append(category)
+    if entity_id:
+        where.append("entity_id=?");args.append(entity_id)
+    if document_type:
+        where.append("document_type=?");args.append(document_type)
+    if country:
+        where.append("country=?");args.append(country)
     if source in ("upload","google_drive","scanner_folder","telegram"):
         where.append("source=?");args.append(source)
     if ocr in ("pending","processing","done","empty","failed"):
@@ -554,10 +598,11 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope
             args.extend(ids)
         else:
             x=f"%{q.strip()}%"
-            where.append("(title LIKE ? OR original_name LIKE ? OR ocr_text LIKE ? OR tags LIKE ? OR notes LIKE ?)")
-            args.extend([x,x,x,x,x])
+            where.append("(title LIKE ? OR original_name LIKE ? OR ocr_text LIKE ? OR tags LIKE ? OR notes LIKE ? OR entity_id IN (SELECT id FROM entities WHERE name LIKE ?))")
+            args.extend([x,x,x,x,x,x])
     order={"newest":"created_at DESC","oldest":"created_at ASC","name":"title COLLATE NOCASE ASC","size":"size DESC"}.get(sort,"created_at DESC")
-    sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text
+    sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text,smart_filename,document_type,country,entity_id,
+            coalesce((SELECT name FROM entities e WHERE e.id=documents.entity_id),'') AS entity_name
             FROM documents WHERE {' AND '.join(where)} ORDER BY {order} LIMIT 500"""
     with db() as con:
         rows=[]
@@ -571,7 +616,9 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope
 @app.get("/api/documents/{did}")
 def document(did:str):
     with db() as con:
-        row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
+        row=con.execute("""SELECT d.*,
+            coalesce((SELECT name FROM entities e WHERE e.id=d.entity_id),'') AS entity_name
+            FROM documents d WHERE d.id=?""",(did,)).fetchone()
         if not row:raise HTTPException(404)
         d=dict(row);d["ocr_text"]=(d["ocr_text"] or "")[:30000]
         return d
@@ -593,7 +640,7 @@ def drive_upload(file:UploadFile=File(...),x_drive_token:str|None=Header(None,al
 
 @app.patch("/api/documents/{did}")
 def update_document(did:str,payload:dict=Body(...)):
-    allowed={"title","category","tags","notes","favorite","filename"}
+    allowed={"title","category","tags","notes","favorite","filename","smart_filename","entity_id","document_type","country"}
     updates=[];args=[]
     with db() as con:
         current=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
@@ -601,6 +648,19 @@ def update_document(did:str,payload:dict=Body(...)):
     for k,v in payload.items():
         if k not in allowed:continue
         if k=="favorite":v=1 if bool(v) else 0
+        if k=="entity_id":
+            v=str(v or "").strip()
+            if v:
+                with db() as con:
+                    if not con.execute("SELECT 1 FROM entities WHERE id=?",(v,)).fetchone():raise HTTPException(400,"Unknown entity")
+        if k in ("document_type","country"):
+            v=str(v or "").strip()[:100]
+        if k=="smart_filename":
+            requested=clean_filename(str(v or "").strip())
+            original_ext=Path(current["original_name"]).suffix
+            stem=Path(requested).stem.strip(" .-_")
+            if not stem:raise HTTPException(400,"Invalid suggested filename")
+            v=(stem+original_ext)[:240]
         if k=="filename":
             requested=clean_filename(str(v or "").strip())
             if not requested:raise HTTPException(400,"Filename is required")
@@ -632,15 +692,19 @@ def apply_suggestion(did:str):
     return {"ok":True}
 
 @app.post("/api/documents/{did}/apply-smart-filename")
-def apply_smart_filename(did:str):
+def apply_smart_filename(did:str,payload:dict=Body(default={})):
     with db() as con:
         row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
         if not row:raise HTTPException(404)
-        filename=clean_filename(row["smart_filename"] or "")
+        filename=clean_filename(payload.get("filename") or row["smart_filename"] or "")
         if not filename:raise HTTPException(400,"No OCR filename suggestion")
+        extension=Path(row["original_name"]).suffix
+        stem=Path(filename).stem.strip(" .-_")
+        if not stem:raise HTTPException(400,"Invalid filename")
+        filename=(stem+extension)[:240]
         con.execute(
-            "UPDATE documents SET original_name=?,filename_locked=0,updated_at=? WHERE id=?",
-            (filename,now(),did)
+            "UPDATE documents SET original_name=?,smart_filename=?,filename_locked=0,updated_at=? WHERE id=?",
+            (filename,filename,now(),did)
         )
         fresh=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
         fts_upsert(con,fresh)
@@ -721,7 +785,7 @@ def system_status():
         last=con.execute("SELECT created_at,action,source,details FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
     usage=shutil.disk_usage(ROOT)
     return {
-        "version":"4.4",
+        "version":"4.5",
         "ocr":{"pending":pending,"failed":failed},
         "inbox":{"path":str(inbox),"queued":len(list(inbox.glob('*'))) if inbox.exists() else 0},
         "storage":{"total":usage.total,"used":usage.used,"free":usage.free},
@@ -748,7 +812,10 @@ def create_share(did:str,payload:dict=Body(default={})):
         if not con.execute("SELECT 1 FROM documents WHERE id=? AND deleted=0",(did,)).fetchone():raise HTTPException(404)
         con.execute("INSERT INTO shares(token,document_id,expires_at,created_at,downloads,max_downloads) VALUES(?,?,?,?,0,?)",(token,did,exp,now(),max_downloads))
     rel=f"/s/{token}"
-    return {"ok":True,"token":token,"url":rel,"share_url":(PUBLIC_BASE_URL+rel if PUBLIC_BASE_URL else rel),"expires_at":exp,"max_downloads":max_downloads}
+    download=f"/shared/{token}/file?download=1"
+    return {"ok":True,"token":token,"url":rel,"share_url":(PUBLIC_BASE_URL+rel if PUBLIC_BASE_URL else rel),
+            "download_url":(PUBLIC_BASE_URL+download if PUBLIC_BASE_URL else download),"download_path":download,
+            "expires_at":exp,"max_downloads":max_downloads}
 
 
 @app.get("/api/documents/{did}/shares")
@@ -761,6 +828,8 @@ def list_shares(did:str):
     for x in rows:
         x["url"]=f'/s/{x["token"]}'
         x["share_url"]=(PUBLIC_BASE_URL+x["url"] if PUBLIC_BASE_URL else x["url"])
+        download=f'/shared/{x["token"]}/file?download=1'
+        x["download_url"]=(PUBLIC_BASE_URL+download if PUBLIC_BASE_URL else download)
         x["expired"]=datetime.fromisoformat(x["expires_at"])<current
         x["exhausted"]=bool(x["max_downloads"] and x["downloads"]>=x["max_downloads"])
     return {"items":rows}
@@ -791,7 +860,9 @@ def shared_page(token:str):
     usage=(f'{row["downloads"]}/{row["max_downloads"]}' if row["max_downloads"] else f'{row["downloads"]}')
     return f"""<!doctype html><html lang='fa' dir='rtl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
     <meta name='theme-color' content='#0b1224'><title>{title}</title><style>
-    *{{box-sizing:border-box}}body{{font-family:Tahoma,Arial,system-ui;background:#0b1224;color:#eef3ff;margin:0}}
+    @font-face{{font-family:'Noto Sans Arabic';src:url('/font-persian-regular.ttf')}}
+    @font-face{{font-family:'Noto Sans Arabic';src:url('/font-persian-bold.ttf');font-weight:700}}
+    *{{box-sizing:border-box}}body{{font-family:'Noto Sans Arabic',Tahoma,Arial,system-ui;background:#0b1224;color:#eef3ff;margin:0}}
     header{{padding:14px 18px;background:#111a31;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:2}}
     .meta{{min-width:0}}h1{{font-size:16px;margin:0 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}small{{color:#98a6bd;direction:auto;display:block}}
     .actions{{display:flex;gap:8px}}a{{text-decoration:none}}.btn{{display:inline-block;border-radius:10px;padding:9px 12px;background:#2868f0;color:white;font-weight:700}}
@@ -908,7 +979,7 @@ def telegram_identity(request:Request):
 
 @app.get("/api/telegram/me")
 def telegram_me(request:Request):
-    return {"ok":True,"user":telegram_identity(request),"version":"4.4"}
+    return {"ok":True,"user":telegram_identity(request),"version":"4.5"}
 
 @app.get("/api/telegram/stats")
 def telegram_stats(request:Request):
@@ -918,13 +989,33 @@ def telegram_stats(request:Request):
 def telegram_categories(request:Request):
     telegram_identity(request);return categories()
 
+@app.get("/api/telegram/entities")
+def telegram_entities(request:Request,q:str="",kind:str=""):
+    telegram_identity(request);return entities(q,kind)
+
+@app.post("/api/telegram/entities")
+def telegram_create_entity(request:Request,payload:dict=Body(...)):
+    telegram_identity(request);return create_entity(payload)
+
+@app.patch("/api/telegram/entities/{eid}")
+def telegram_update_entity(request:Request,eid:str,payload:dict=Body(...)):
+    telegram_identity(request);return update_entity(eid,payload)
+
+@app.get("/api/telegram/document-types")
+def telegram_document_types(request:Request):
+    telegram_identity(request);return document_types()
+
+@app.get("/api/telegram/countries")
+def telegram_countries(request:Request):
+    telegram_identity(request);return countries()
+
 @app.get("/api/telegram/activity")
 def telegram_activity(request:Request,limit:int=30):
     telegram_identity(request);return activity(limit)
 
 @app.get("/api/telegram/documents")
-def telegram_documents(request:Request,q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest"):
-    telegram_identity(request);return documents(q,category,source,ocr,days,scope,sort)
+def telegram_documents(request:Request,q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest",entity_id:str="",document_type:str="",country:str=""):
+    telegram_identity(request);return documents(q,category,source,ocr,days,scope,sort,entity_id,document_type,country)
 
 @app.post("/api/telegram/documents/upload")
 def telegram_upload(request:Request,files:list[UploadFile]=File(...)):
@@ -954,8 +1045,8 @@ def telegram_retry_ocr(request:Request,did:str,payload:dict=Body(default={})):
     telegram_identity(request);return retry_ocr(did,payload)
 
 @app.post("/api/telegram/documents/{did}/apply-smart-filename")
-def telegram_apply_smart_filename(request:Request,did:str):
-    telegram_identity(request);return apply_smart_filename(did)
+def telegram_apply_smart_filename(request:Request,did:str,payload:dict=Body(default={})):
+    telegram_identity(request);return apply_smart_filename(did,payload)
 
 @app.post("/api/telegram/documents/{did}/share")
 def telegram_create_share(request:Request,did:str,payload:dict=Body(default={})):
@@ -981,6 +1072,14 @@ def manifest():
 def service_worker():
     return FileResponse(WEB/"sw.js",media_type="application/javascript",headers={"Cache-Control":"no-cache"})
 
+@app.get("/font-persian-regular.ttf")
+def persian_font_regular():
+    return FileResponse(WEB/"fonts"/"NotoSansArabic-Regular.ttf",media_type="font/ttf",headers={"Cache-Control":"public,max-age=31536000,immutable"})
+
+@app.get("/font-persian-bold.ttf")
+def persian_font_bold():
+    return FileResponse(WEB/"fonts"/"NotoSansArabic-Bold.ttf",media_type="font/ttf",headers={"Cache-Control":"public,max-age=31536000,immutable"})
+
 @app.get("/api/categories")
 def categories():
     return {"items":[
@@ -996,3 +1095,65 @@ def categories():
         {"id":"invoice","name":"فاکتور"},
         {"id":"contract","name":"قرارداد"}
     ]}
+
+@app.get("/api/document-types")
+def document_types():
+    return {"items":["شناسنامه","کارت ملی","گذرنامه","کارت اقامت","گواهینامه رانندگی","نامه حقوقی","قرارداد اجاره","بیمه","صورتحساب بانکی","نامه بانکی","مدرک تحصیلی","قرارداد کاری","فیش حقوقی","سند مالیاتی","فاکتور","قرارداد","سایر"]}
+
+@app.get("/api/countries")
+def countries():
+    return {"items":[
+        {"id":"IR","name":"ایران"},{"id":"AT","name":"اتریش"},{"id":"DE","name":"آلمان"},
+        {"id":"IT","name":"ایتالیا"},{"id":"TR","name":"ترکیه"},{"id":"AE","name":"امارات"},
+        {"id":"FR","name":"فرانسه"},{"id":"CH","name":"سوئیس"},{"id":"other","name":"سایر"}
+    ]}
+
+@app.get("/api/entities")
+def entities(q:str="",kind:str=""):
+    where=["1=1"];args=[]
+    if q.strip():where.append("e.name LIKE ?");args.append(f"%{q.strip()}%")
+    if kind in ("person","organization","other"):where.append("e.kind=?");args.append(kind)
+    with db() as con:
+        rows=[dict(r) for r in con.execute(f"""SELECT e.*,
+            count(d.id) AS document_count FROM entities e
+            LEFT JOIN documents d ON d.entity_id=e.id AND d.deleted=0
+            WHERE {' AND '.join(where)} GROUP BY e.id ORDER BY e.name COLLATE NOCASE""",args)]
+    return {"items":rows}
+
+@app.post("/api/entities")
+def create_entity(payload:dict=Body(...)):
+    name=re.sub(r"\s+"," ",str(payload.get("name") or "")).strip()[:160]
+    kind=str(payload.get("kind") or "person")
+    country=str(payload.get("country") or "").strip()[:20]
+    notes=str(payload.get("notes") or "").strip()[:1000]
+    if not name:raise HTTPException(400,"Entity name is required")
+    if kind not in ("person","organization","other"):raise HTTPException(400,"Invalid entity kind")
+    with db() as con:
+        duplicate=con.execute("SELECT id FROM entities WHERE name=? COLLATE NOCASE AND kind=?",(name,kind)).fetchone()
+        if duplicate:raise HTTPException(409,"This entity already exists")
+        eid=str(uuid.uuid4());ts=now()
+        con.execute("INSERT INTO entities(id,name,kind,country,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",(eid,name,kind,country,notes,ts,ts))
+        row=con.execute("SELECT * FROM entities WHERE id=?",(eid,)).fetchone()
+    audit("entity_created",source="web",details=f"{kind}:{name}")
+    return {"ok":True,"item":dict(row)}
+
+@app.patch("/api/entities/{eid}")
+def update_entity(eid:str,payload:dict=Body(...)):
+    allowed={"name","kind","country","notes"};updates=[];args=[]
+    for key,value in payload.items():
+        if key not in allowed:continue
+        value=str(value or "").strip()
+        if key=="name" and not value:raise HTTPException(400,"Entity name is required")
+        if key=="kind" and value not in ("person","organization","other"):raise HTTPException(400,"Invalid entity kind")
+        updates.append(f"{key}=?");args.append(value[:1000] if key=="notes" else value[:160])
+    if not updates:return {"ok":True}
+    updates.append("updated_at=?");args.extend([now(),eid])
+    try:
+        with db() as con:
+            if not con.execute("SELECT 1 FROM entities WHERE id=?",(eid,)).fetchone():raise HTTPException(404)
+            con.execute(f"UPDATE entities SET {','.join(updates)} WHERE id=?",args)
+            row=con.execute("SELECT * FROM entities WHERE id=?",(eid,)).fetchone()
+    except sqlite3.IntegrityError:
+        raise HTTPException(409,"This entity already exists")
+    audit("entity_updated",source="web",details=eid)
+    return {"ok":True,"item":dict(row)}
