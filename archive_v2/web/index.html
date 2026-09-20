@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1224">
 <link rel="manifest" href="/manifest.webmanifest">
-<title>Hossein Archive 4.0</title>
+<title>Hossein Archive 4.1</title>
 <style>
 :root{
  --bg:#f3f6fb;--card:#fff;--card2:#fafcff;--text:#172033;--muted:#748096;--line:#e4eaf2;
@@ -119,6 +119,65 @@ html[data-theme="dark"] .suggest{background:#12342a;color:#99e5c9;border-color:#
  .topbar{flex-wrap:wrap}.search{order:3;flex-basis:100%}.stats{grid-template-columns:1fr 1fr}.toolbar{flex-direction:column;align-items:stretch}.filters{display:grid;grid-template-columns:1fr 1fr}
  .tools{justify-content:space-between}.form-grid{grid-template-columns:1fr}.span2{grid-column:1}.grid{grid-template-columns:1fr}.main{padding:10px}.stat{padding:12px}.preview-card{width:100vw;height:100vh;border-radius:0}.modal{padding:0}.meta-actions{grid-template-columns:1fr}.bulkbar{bottom:8px}
 }
+
+/* Compact professional workspace — v4.1 */
+:root{--r:13px;--shadow:0 8px 24px rgba(30,48,78,.07)}
+html,body{font-family:Vazirmatn,"Segoe UI",Tahoma,Arial,sans-serif;font-size:13px}
+.shell{grid-template-columns:218px minmax(0,1fr);transition:grid-template-columns .2s ease}
+.sidebar{padding:13px 10px;background:linear-gradient(180deg,#111b31 0%,#09111f 100%);overflow-x:hidden}
+.brand{gap:9px;padding:3px 5px 14px;white-space:nowrap}
+.logo{width:36px;height:36px;border-radius:11px;font-size:12px;flex:0 0 36px;box-shadow:0 7px 18px #276ae733}
+.brand b{font-size:14px}.brand small{font-size:9px;margin-top:2px}
+.menu-toggle{margin-right:auto;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:#ffffff0c;color:#b9c7dc;flex:0 0 30px}
+.menu-toggle:hover{background:#ffffff18;color:#fff}
+.nav-group{font-size:9px;font-weight:700;color:#71829e;padding:11px 10px 4px;letter-spacing:.4px;white-space:nowrap}
+.navbtn{padding:8px 9px;border-radius:9px;margin:2px 0;min-height:36px;justify-content:flex-start;gap:9px;white-space:nowrap}
+.navbtn:hover,.navbtn.active{background:#ffffff0e}
+.navbtn.active{box-shadow:inset -3px 0 #4d82f5;color:#fff}
+.nav-icon{width:20px;text-align:center;font-size:14px;flex:0 0 20px;opacity:.9}
+.nav-label{overflow:hidden;text-overflow:ellipsis}
+.navbtn .count{margin-right:auto}
+.side-sep{margin:9px 7px}.side-note{font-size:9px;line-height:1.7;padding:9px}
+.shell.menu-mini{grid-template-columns:62px minmax(0,1fr)}
+.menu-mini .brand>div:nth-child(2),.menu-mini .nav-label,.menu-mini .nav-group,.menu-mini .side-note,.menu-mini .count{display:none}
+.menu-mini .brand{justify-content:center;padding-inline:0}.menu-mini .logo{display:none}.menu-mini .menu-toggle{position:static;margin:0}
+.menu-mini .navbtn{justify-content:center;padding:8px;margin-top:3px}.menu-mini .navbtn.active{box-shadow:inset -2px 0 #4d82f5}
+.main{padding:14px 18px 68px}
+.topbar{gap:7px;margin-bottom:10px;padding:5px 0}
+.search input{height:41px;border-radius:11px;padding-right:41px;box-shadow:none}
+.search .glass{right:14px;top:8px;font-size:19px}.search .shortcut{top:8px}
+.btn{border-radius:9px;padding:8px 10px;font-size:12px}.icon{min-width:36px}
+.stats{grid-template-columns:repeat(8,minmax(80px,1fr));gap:7px;margin-bottom:10px}
+.stat{border-radius:11px;padding:8px 10px;box-shadow:none;min-width:0}
+.stat b{font-size:16px;margin-bottom:1px}.stat span{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.toolbar{margin-bottom:5px}.filters{gap:5px}
+select{border-radius:8px;padding:7px 8px;font-size:11px;max-width:170px}
+.segment{border-radius:9px}.segment button{padding:4px 8px}
+.chips{padding:3px 0 6px}.chip{padding:4px 8px;font-size:10px}
+.result-info{font-size:10px;margin:3px 2px 6px}
+.panel{border-radius:12px;box-shadow:none}
+.list-head,.list-row{grid-template-columns:28px minmax(230px,2fr) 105px 82px 75px 90px 144px;gap:7px;padding:8px 10px}
+.list-head{font-size:9px}.list-row{min-height:54px}
+.check{width:15px;height:15px}.title{font-size:12px}.sub,.snippet{font-size:9px;margin-top:2px}.snippet{line-height:1.5;margin-top:3px;-webkit-line-clamp:1}
+.badge{padding:3px 6px;font-size:9px}
+.actions{gap:3px;flex-wrap:nowrap}.smallbtn{border-radius:7px;padding:5px 6px;font-size:10px;white-space:nowrap}
+.grid{grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:10px}
+.card{border-radius:12px;box-shadow:none}.card:hover{transform:translateY(-1px);box-shadow:0 9px 24px #14223d10}
+.thumb{height:132px}.cardbody{padding:10px}.cardtitle{font-size:12px}.cardmeta{margin-top:7px}.cardactions{margin-top:8px;gap:4px}
+.modal-card{border-radius:15px}.modal-head{padding:11px 14px}.modal-head h3{font-size:14px}.modal-body{padding:14px}
+.field{border-radius:9px;padding:9px 10px}.form-grid{gap:9px}.upload-zone{border-radius:13px;padding:28px 15px}
+.preview-card{width:min(1220px,97vw);height:min(820px,95vh);grid-template-columns:minmax(0,1fr) 310px}
+.meta{padding:14px}.meta-block{margin-top:11px}.meta-actions{gap:5px;margin-top:13px}
+.ocrbox{max-height:130px}.system-card{padding:9px;border-radius:10px}
+@media(max-width:1120px){
+ .shell,.shell.menu-mini{grid-template-columns:1fr}.sidebar{width:230px;box-shadow:-12px 0 35px #0004}.menu-mini .logo{display:grid}.menu-mini .brand>div:nth-child(2),.menu-mini .nav-label,.menu-mini .nav-group,.menu-mini .side-note,.menu-mini .count{display:initial}.menu-mini .menu-toggle{position:static;margin-right:auto}.menu-mini .navbtn{justify-content:flex-start;padding:8px 9px}
+ .main{padding:12px}.stats{grid-template-columns:repeat(4,1fr)}
+}
+@media(max-width:650px){
+ html,body{font-size:12px}.main{padding:8px}.topbar{gap:5px}.topbar .primary{padding-inline:9px}.search .shortcut{display:none}.stats{display:flex;overflow:auto;scroll-snap-type:x mandatory;padding-bottom:3px}.stat{min-width:92px;scroll-snap-align:start}
+ .filters{display:flex;overflow:auto;flex-wrap:nowrap;padding-bottom:3px}.filters select{min-width:128px}.toolbar{align-items:stretch}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.thumb{height:105px}.cardbody{padding:8px}.cardactions .smallbtn{font-size:9px}
+ .preview-card{grid-template-rows:auto 49vh auto}.modal-head{padding:10px 12px}.meta{padding:12px}
+}
 </style>
 </head>
 <body>
@@ -126,18 +185,19 @@ html[data-theme="dark"] .suggest{background:#12342a;color:#99e5c9;border-color:#
 
 <div class="shell">
 <aside class="sidebar" id="sidebar">
- <div class="brand"><div class="logo">HA</div><div><b>Hossein Archive</b><small>Local Document Center</small></div></div>
- <button class="navbtn active" data-scope="all" onclick="setScope('all',this)"><span>همه اسناد</span><span id="nAll" class="count">0</span></button>
- <button class="navbtn" data-scope="favorites" onclick="setScope('favorites',this)"><span>علاقه‌مندی‌ها</span><span id="nFav" class="count">0</span></button>
- <button class="navbtn" data-scope="uncategorized" onclick="setScope('uncategorized',this)"><span>بدون دسته</span><span id="nOther" class="count">0</span></button>
- <button class="navbtn" data-scope="trash" onclick="setScope('trash',this)"><span>سطل زباله</span><span id="nTrash" class="count">0</span></button>
- <div class="side-sep"></div>
- <button class="navbtn" onclick="setSource('scanner_folder',this)"><span>اسکنر و پوشه ورودی</span><span id="nScanner" class="count">0</span></button>
- <button class="navbtn" onclick="setSource('telegram',this)"><span>اسناد تلگرام</span><span id="nTelegram" class="count">0</span></button>
- <button class="navbtn" onclick="openSystem()"><span>وضعیت و فعالیت‌ها</span><span>●</span></button>
- <div class="side-sep"></div>
- <button class="navbtn" onclick="openUpload()"><span>＋ افزودن سند</span></button>
- <div class="side-note">نسخه حرفه‌ای 4.0<br>سرور: 192.168.1.35<br>ورودی خودکار، OCR و Telegram</div>
+ <div class="brand"><div class="logo">HA</div><div><b>آرشیو هوشمند</b><small>Hossein Archive</small></div><button class="menu-toggle" onclick="toggleMenu()" title="جمع‌کردن منو">☰</button></div>
+ <div class="nav-group">کتابخانه</div>
+ <button class="navbtn active" data-scope="all" onclick="setScope('all',this)" title="همه اسناد"><span class="nav-icon">▤</span><span class="nav-label">همه اسناد</span><span id="nAll" class="count">0</span></button>
+ <button class="navbtn" data-scope="favorites" onclick="setScope('favorites',this)" title="علاقه‌مندی‌ها"><span class="nav-icon">★</span><span class="nav-label">علاقه‌مندی‌ها</span><span id="nFav" class="count">0</span></button>
+ <button class="navbtn" data-scope="uncategorized" onclick="setScope('uncategorized',this)" title="بدون دسته"><span class="nav-icon">◇</span><span class="nav-label">بدون دسته</span><span id="nOther" class="count">0</span></button>
+ <button class="navbtn" data-scope="trash" onclick="setScope('trash',this)" title="سطل زباله"><span class="nav-icon">♲</span><span class="nav-label">سطل زباله</span><span id="nTrash" class="count">0</span></button>
+ <div class="nav-group">ورودی‌ها</div>
+ <button class="navbtn" onclick="setSource('scanner_folder',this)" title="اسکنر و پوشه ورودی"><span class="nav-icon">▣</span><span class="nav-label">اسکنر و پوشه</span><span id="nScanner" class="count">0</span></button>
+ <button class="navbtn" onclick="setSource('telegram',this)" title="اسناد تلگرام"><span class="nav-icon">➤</span><span class="nav-label">تلگرام</span><span id="nTelegram" class="count">0</span></button>
+ <div class="nav-group">مدیریت</div>
+ <button class="navbtn" onclick="openSystem()" title="وضعیت و فعالیت‌ها"><span class="nav-icon">◉</span><span class="nav-label">وضعیت سامانه</span></button>
+ <button class="navbtn" onclick="openUpload()" title="افزودن سند"><span class="nav-icon">＋</span><span class="nav-label">افزودن سند</span></button>
+ <div class="side-note">نسخه 4.1 · سرور 192.168.1.35<br>OCR · Scanner · Telegram</div>
 </aside>
 
 <main class="main">
@@ -210,7 +270,8 @@ html[data-theme="dark"] .suggest{background:#12342a;color:#99e5c9;border-color:#
   <div class="modal-head"><h3>ویرایش مشخصات</h3><button class="close" onclick="closeModal('editModal')">✕</button></div>
   <div class="modal-body">
    <div class="form-grid">
-    <div class="span2"><label>عنوان</label><input id="eTitle" class="field"></div>
+    <div class="span2"><label>عنوان نمایشی سند</label><input id="eTitle" class="field" placeholder="عنوانی که در آرشیو دیده می‌شود"></div>
+    <div class="span2"><label>نام فایل هنگام نمایش و دانلود</label><input id="eFilename" class="field" dir="auto" placeholder="مثلاً قرارداد شرکت.pdf"><small style="display:block;color:var(--muted);margin-top:5px">پسوند اصلی فایل به‌صورت خودکار حفظ می‌شود.</small></div>
     <div><label>دسته</label><select id="eCategory" class="field"></select></div>
     <div><label>برچسب‌ها</label><input id="eTags" class="field" placeholder="مثلاً اتریش، بیمه، قرارداد"></div>
     <div class="span2"><label>یادداشت شخصی</label><textarea id="eNotes" class="field" placeholder="هر توضیحی که بعداً در جستجو هم پیدا شود…"></textarea></div>
@@ -276,6 +337,12 @@ html[data-theme="dark"] .suggest{background:#12342a;color:#99e5c9;border-color:#
 const state={scope:'all',docs:[],categories:[],current:null,timer:null,stats:null,view:localStorage.getItem('archiveView')||'list',selected:new Set(),tags:[]};
 const $=id=>document.getElementById(id);
 const sidebar=$('sidebar'),fileInput=$('fileInput');
+function toggleMenu(){
+ if(innerWidth<1120){sidebar.classList.toggle('open');return}
+ document.querySelector('.shell').classList.toggle('menu-mini');
+ localStorage.setItem('archiveMenuMini',document.querySelector('.shell').classList.contains('menu-mini')?'1':'0')
+}
+if(localStorage.getItem('archiveMenuMini')==='1'&&innerWidth>=1120)document.querySelector('.shell').classList.add('menu-mini');
 
 async function api(url,opt={}){
  const r=await fetch(url,opt);let data=null;try{data=await r.json()}catch(e){}
@@ -353,14 +420,14 @@ function rowHtml(d){
  return '<div class="list-row"><div><input class="check" type="checkbox" '+checked+' onchange="toggleSelect(\''+d.id+'\',this.checked)"></div><div><div class="title" onclick="openDoc(\''+d.id+'\')">'+highlight(d.title,q)+'</div><div class="sub">'+esc(d.original_name)+' · '+esc(sourceName(d.source))+'</div>'+(d.snippet?'<div class="snippet">'+highlight(d.snippet,q)+'</div>':'')+'</div>'+
  '<div><span class="badge">'+esc(catName(d.category))+'</span></div><div>'+ocrBadge(d.ocr_status)+'</div><div>'+fmtSize(d.size)+'</div><div>'+fmtDate(d.created_at)+'</div><div class="actions">'+
  (trash?'<button class="smallbtn success" onclick="restoreDoc(\''+d.id+'\')">بازیابی</button><button class="smallbtn danger" onclick="permanentDelete(\''+d.id+'\')">حذف قطعی</button>':
- '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">مشاهده</button><button class="smallbtn" onclick="shareDoc(\''+d.id+'\')">اشتراک</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button><button class="smallbtn danger" onclick="trashDoc(\''+d.id+'\')">حذف</button>')+'</div></div>'
+ '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">باز</button><button class="smallbtn" onclick="quickEdit(\''+d.id+'\')">ویرایش</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button><button class="smallbtn danger" onclick="trashDoc(\''+d.id+'\')">حذف</button>')+'</div></div>'
 }
 function cardHtml(d){
  const trash=state.scope==='trash',checked=state.selected.has(d.id)?'checked':'';
  const preview=d.has_preview?'<img loading="lazy" src="/api/documents/'+d.id+'/preview" alt="">':'<div class="fileicon">'+(d.mime==='application/pdf'?'PDF':'IMG')+'</div>';
  return '<article class="card"><label class="cardcheck"><input class="check" type="checkbox" '+checked+' onchange="toggleSelect(\''+d.id+'\',this.checked)"></label><div class="thumb" onclick="openDoc(\''+d.id+'\')">'+preview+'<span class="sourcechip">'+esc(sourceName(d.source))+'</span></div><div class="cardbody"><div class="cardtitle" onclick="openDoc(\''+d.id+'\')">'+highlight(d.title,$('search').value.trim())+'</div><div class="sub">'+esc(d.original_name)+'</div><div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap"><span class="badge">'+esc(catName(d.category))+'</span>'+ocrBadge(d.ocr_status)+'</div><div class="cardmeta"><span>'+fmtSize(d.size)+'</span><span>'+fmtDate(d.created_at)+'</span></div><div class="cardactions">'+
  (trash?'<button class="smallbtn success" onclick="restoreDoc(\''+d.id+'\')">بازیابی</button><button class="smallbtn danger" onclick="permanentDelete(\''+d.id+'\')">حذف قطعی</button>':
- '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">مشاهده</button><button class="smallbtn" onclick="shareDoc(\''+d.id+'\')">اشتراک</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button>')+'</div></div></article>'
+ '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">باز</button><button class="smallbtn" onclick="quickEdit(\''+d.id+'\')">ویرایش</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button>')+'</div></div></article>'
 }
 
 function toggleSelect(id,on){on?state.selected.add(id):state.selected.delete(id);updateBulk()}
@@ -387,8 +454,9 @@ async function openDoc(id){
 }
 function closePreview(){$('viewer').src='about:blank';closeModal('previewModal')}
 async function applySuggestion(){await api('/api/documents/'+state.current.id+'/apply-suggestion',{method:'POST'});toast('عنوان پیشنهادی اعمال شد');closePreview();refreshAll()}
-function editCurrent(){const d=state.current;if(!d)return;closePreview();$('eTitle').value=d.title||'';$('eCategory').value=d.category||'other';$('eTags').value=d.tags||'';$('eNotes').value=d.notes||'';$('editModal').classList.remove('hidden')}
-async function saveEdit(){const d=state.current;if(!d)return;await api('/api/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('eTitle').value.trim(),category:$('eCategory').value,tags:$('eTags').value.trim(),notes:$('eNotes').value.trim()})});closeModal('editModal');toast('مشخصات ذخیره شد');const t=await api('/api/tags');state.tags=t.items;renderChips();refreshAll()}
+function editCurrent(){const d=state.current;if(!d)return;closePreview();$('eTitle').value=d.title||'';$('eFilename').value=d.original_name||'';$('eCategory').value=d.category||'other';$('eTags').value=d.tags||'';$('eNotes').value=d.notes||'';$('editModal').classList.remove('hidden')}
+async function quickEdit(id){state.current=await api('/api/documents/'+id);editCurrent()}
+async function saveEdit(){const d=state.current;if(!d)return;const filename=$('eFilename').value.trim();if(!filename){toast('نام فایل نمی‌تواند خالی باشد');return}await api('/api/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('eTitle').value.trim(),filename,category:$('eCategory').value,tags:$('eTags').value.trim(),notes:$('eNotes').value.trim()})});closeModal('editModal');toast('عنوان و نام فایل ذخیره شد');const t=await api('/api/tags');state.tags=t.items;renderChips();refreshAll()}
 async function toggleFav(id,v){await api('/api/documents/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({favorite:!!v})});refreshAll()}
 async function toggleCurrentFav(){if(!state.current)return;await toggleFav(state.current.id,!state.current.favorite);state.current.favorite=!state.current.favorite;toast('علاقه‌مندی تغییر کرد')}
 async function retryCurrent(){if(!state.current)return;await api('/api/documents/'+state.current.id+'/retry-ocr',{method:'POST'});toast('سند برای OCR مجدد وارد صف شد');closePreview();refreshAll()}

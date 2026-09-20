@@ -453,13 +453,13 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="4.0",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="4.1",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"4.0","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"4.1","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
@@ -550,11 +550,23 @@ def drive_upload(file:UploadFile=File(...),x_drive_token:str|None=Header(None,al
 
 @app.patch("/api/documents/{did}")
 def update_document(did:str,payload:dict=Body(...)):
-    allowed={"title","category","tags","notes","favorite"}
+    allowed={"title","category","tags","notes","favorite","filename"}
     updates=[];args=[]
+    with db() as con:
+        current=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
+    if not current:raise HTTPException(404)
     for k,v in payload.items():
         if k not in allowed:continue
         if k=="favorite":v=1 if bool(v) else 0
+        if k=="filename":
+            requested=clean_filename(str(v or "").strip())
+            if not requested:raise HTTPException(400,"Filename is required")
+            original_ext=Path(current["original_name"]).suffix
+            requested_stem=Path(requested).stem.strip(" .-_")
+            if not requested_stem:raise HTTPException(400,"Invalid filename")
+            v=(requested_stem+original_ext)[:240]
+            updates.extend(["original_name=?","smart_filename=?"]);args.extend([v,v])
+            continue
         updates.append(f"{k}=?");args.append(v)
     if not updates:return {"ok":True}
     updates.append("updated_at=?");args.append(now());args.append(did)
@@ -646,7 +658,7 @@ def system_status():
         last=con.execute("SELECT created_at,action,source,details FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
     usage=shutil.disk_usage(ROOT)
     return {
-        "version":"4.0",
+        "version":"4.1",
         "ocr":{"pending":pending,"failed":failed},
         "inbox":{"path":str(inbox),"queued":len(list(inbox.glob('*'))) if inbox.exists() else 0},
         "storage":{"total":usage.total,"used":usage.used,"free":usage.free},
