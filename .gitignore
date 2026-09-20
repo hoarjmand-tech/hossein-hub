@@ -19,3 +19,27 @@ postgres/
 *.log
 __pycache__/
 *.pyc
+
+# Environment
+.env
+
+# Secrets
+secrets/
+
+# Runtime data
+data/
+
+# Local backups
+docker-compose.yml.error-backup
+
+# Environment
+.env
+
+# Secrets
+secrets/
+
+# Runtime data
+data/
+
+# Local backups
+docker-compose.yml.error-backup
