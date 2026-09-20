@@ -1,3 +1,44 @@
-# Hossein Archive
+# Hossein Hub Archive 4.0
 
-Archive-only document management system. Features: Persian RTL UI, direct upload, Google Drive push intake, OCR indexing, search, preview, metadata editing, favorites, trash, and expiring share links.
+سامانه ماژولار آرشیو هوشمند اسناد با قابلیت‌های زیر:
+
+- آپلود وب، Drag & Drop و نمایش PDF یا تصویر
+- OCR فارسی، انگلیسی و آلمانی
+- جست‌وجوی متن کامل، دسته‌بندی و نام‌گذاری هوشمند
+- تشخیص فایل تکراری با SHA-256
+- پوشه ورودی خودکار برای اسکنرها
+- بات تلگرام برای آپلود، آمار و جست‌وجو
+- پیش‌نمایش، اشتراک موقت، دانلود و خروجی گروهی
+- گزارش فعالیت، وضعیت پردازش و فضای ذخیره‌سازی
+- حفظ فایل اصلی و Migration خودکار دیتابیس
+
+## Deploy
+
+```bash
+cd /opt/hossein-hub && git pull origin main && sudo bash deploy.sh
+```
+
+پنل داخلی: `http://192.168.1.35:8080`
+
+پوشه ورودی اسکنر: `/opt/hossein-hub/scanner_inbox`
+
+فایل‌های پردازش‌شده و خطادار به‌ترتیب به `scanner_processed` و
+`scanner_errors` منتقل می‌شوند.
+
+## Telegram
+
+مقادیر `TELEGRAM_BOT_TOKEN` و `TELEGRAM_ALLOWED_USERS` را در فایل `.env`
+قرار دهید و دوباره `sudo bash deploy.sh` را اجرا کنید. تا پیش از ثبت Token،
+ماژول تلگرام در حالت انتظار باقی می‌ماند.
+
+راه‌اندازی بات بدون ویرایش دستی فایل:
+
+```bash
+sudo bash setup-telegram.sh BOT_TOKEN TELEGRAM_USER_ID
+```
+
+بررسی کامل سلامت سامانه:
+
+```bash
+sudo bash health-check.sh
+```

@@ -8,7 +8,8 @@ services:
       DRIVE_PUSH_TOKEN_FILE: /run/secrets/drive_push_token
       COOKIE_SECURE: "false"
       MAX_UPLOAD_MB: "100"
-      PUBLIC_BASE_URL: "https://hossein-hub.tailf8fccb.ts.net"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://192.168.1.35:8080}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     secrets:
       - drive_push_token
     volumes:
@@ -20,6 +21,39 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  document-intake:
+    build: ./intake-worker
+    container_name: hossein-hub-document-intake
+    restart: unless-stopped
+    environment:
+      ARCHIVE_API: http://archive:8080
+      INBOX_PATH: /inbox
+      PROCESSED_PATH: /processed
+      ERROR_PATH: /errors
+      SCAN_INTERVAL: "5"
+      STABLE_SECONDS: "8"
+      MAX_FILE_MB: "100"
+    volumes:
+      - ./scanner_inbox:/inbox
+      - ./scanner_processed:/processed
+      - ./scanner_errors:/errors
+    depends_on:
+      archive:
+        condition: service_healthy
+
+  telegram-bot:
+    build: ./telegram-bot
+    container_name: hossein-hub-telegram-bot
+    restart: unless-stopped
+    environment:
+      ARCHIVE_API: http://archive:8080
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://192.168.1.35:8080}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:-}
+    depends_on:
+      archive:
+        condition: service_healthy
 
   tailscale:
     image: tailscale/tailscale:stable

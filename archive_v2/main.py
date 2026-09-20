@@ -129,9 +129,36 @@ def init_db():
         dcols={r["name"] for r in con.execute("PRAGMA table_info(documents)")}
         if "notes" not in dcols:
             con.execute("ALTER TABLE documents ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+        document_migrations={
+            "smart_filename":"TEXT NOT NULL DEFAULT ''",
+            "description_fa":"TEXT NOT NULL DEFAULT ''",
+            "description_de":"TEXT NOT NULL DEFAULT ''",
+            "document_type":"TEXT NOT NULL DEFAULT ''",
+            "ai_confidence":"REAL NOT NULL DEFAULT 0",
+            "extracted_entities":"TEXT NOT NULL DEFAULT '{}'",
+        }
+        for column,declaration in document_migrations.items():
+            if column not in dcols:
+                con.execute(f"ALTER TABLE documents ADD COLUMN {column} {declaration}")
         scols={r["name"] for r in con.execute("PRAGMA table_info(shares)")}
         if "max_downloads" not in scols:
             con.execute("ALTER TABLE shares ADD COLUMN max_downloads INTEGER NOT NULL DEFAULT 0")
+        con.executescript("""
+        CREATE TABLE IF NOT EXISTS audit_events(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          action TEXT NOT NULL,
+          document_id TEXT,
+          source TEXT NOT NULL DEFAULT 'system',
+          details TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_events(created_at DESC);
+        CREATE TABLE IF NOT EXISTS app_settings(
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        """)
         try:
             con.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts2
               USING fts5(id UNINDEXED,title,original_name,ocr_text,tags,category,notes,tokenize='unicode61')""")
@@ -147,6 +174,16 @@ def init_db():
 
 def clean_filename(name):
     return Path(name or "document").name.replace("\x00","")[:240]
+
+def audit(action,document_id=None,source="system",details=""):
+    try:
+        with db() as con:
+            con.execute(
+                "INSERT INTO audit_events(action,document_id,source,details,created_at) VALUES(?,?,?,?,?)",
+                (str(action)[:80],document_id,str(source)[:80],str(details)[:1000],now())
+            )
+    except Exception as exc:
+        print("audit:",exc,flush=True)
 
 def base_title(name):
     stem=Path(clean_filename(name)).stem
@@ -263,6 +300,7 @@ def ingest_upload(upload:UploadFile,source="upload"):
           (did,title,name,saved["stored"],saved["mime"],saved["size"],saved["sha256"],"pending","","other","",None,0,0,0,source,ts,ts))
         row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
         fts_upsert(con,row)
+    audit("document_ingested",did,source,name)
     return {"ok":True,"duplicate":False,"id":did,"name":name,"bytes":saved["size"],"queued":True}
 
 def tesseract_text(path,langs):
@@ -415,13 +453,13 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="3.3",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="4.0",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"3.3","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"4.0","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
@@ -438,6 +476,9 @@ def stats():
             "storage":con.execute("SELECT coalesce(sum(size),0) FROM documents WHERE deleted=0").fetchone()[0],
             "processing":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND ocr_status IN ('pending','processing')").fetchone()[0],
             "shares":con.execute("SELECT count(*) FROM shares WHERE expires_at>?",(now(),)).fetchone()[0],
+            "scanner":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND source='scanner_folder'").fetchone()[0],
+            "telegram":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND source='telegram'").fetchone()[0],
+            "failed":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND ocr_status='failed'").fetchone()[0],
         }
 
 @app.get("/api/documents")
@@ -448,7 +489,7 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope
     if scope=="uncategorized":where.append("category='other'")
     if category:
         where.append("category=?");args.append(category)
-    if source in ("upload","google_drive"):
+    if source in ("upload","google_drive","scanner_folder","telegram"):
         where.append("source=?");args.append(source)
     if ocr in ("pending","processing","done","empty","failed"):
         where.append("ocr_status=?");args.append(ocr)
@@ -493,10 +534,11 @@ def document(did:str):
         return d
 
 @app.post("/api/documents/upload")
-def upload(files:list[UploadFile]=File(...)):
+def upload(files:list[UploadFile]=File(...),x_archive_source:str|None=Header(None,alias="X-Archive-Source")):
+    source=x_archive_source if x_archive_source in ("upload","scanner_folder","telegram") else "upload"
     out=[]
     for f in files[:50]:
-        out.append(ingest_upload(f,"upload"))
+        out.append(ingest_upload(f,source))
     return {"ok":True,"items":out}
 
 @app.post("/api/google-drive-push/upload")
@@ -521,6 +563,7 @@ def update_document(did:str,payload:dict=Body(...)):
         row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
         if not row:raise HTTPException(404)
         fts_upsert(con,row)
+    audit("document_updated",did,"web",",".join(updates))
     return {"ok":True,"item":dict(row)}
 
 @app.post("/api/documents/{did}/apply-suggestion")
@@ -537,12 +580,14 @@ def apply_suggestion(did:str):
 def trash_document(did:str):
     with db() as con:
         con.execute("UPDATE documents SET deleted=1,updated_at=? WHERE id=?",(now(),did))
+    audit("document_trashed",did,"web")
     return {"ok":True}
 
 @app.post("/api/documents/{did}/restore")
 def restore_document(did:str):
     with db() as con:
         con.execute("UPDATE documents SET deleted=0,updated_at=? WHERE id=?",(now(),did))
+    audit("document_restored",did,"web")
     return {"ok":True}
 
 @app.delete("/api/documents/{did}/permanent")
@@ -586,7 +631,37 @@ def file_view(did:str,download:int=0):
     path=FILES/row["stored_name"]
     if not path.exists():raise HTTPException(404)
     disp="attachment" if download else "inline"
-    return FileResponse(path,media_type=row["mime"],filename=row["original_name"],content_disposition_type=disp)
+    extension=Path(row["original_name"]).suffix.lower() or Path(row["stored_name"]).suffix.lower()
+    preferred=(row["smart_filename"] or "").strip() if "smart_filename" in row.keys() else ""
+    if not preferred:
+        preferred=re.sub(r"[^\w\u0600-\u06ff.-]+","_",row["title"],flags=re.UNICODE).strip("._")+extension
+    return FileResponse(path,media_type=row["mime"],filename=preferred or row["original_name"],content_disposition_type=disp)
+
+@app.get("/api/system/status")
+def system_status():
+    inbox=ROOT/"inbox"
+    with db() as con:
+        pending=con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND ocr_status IN ('pending','processing')").fetchone()[0]
+        failed=con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND ocr_status='failed'").fetchone()[0]
+        last=con.execute("SELECT created_at,action,source,details FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
+    usage=shutil.disk_usage(ROOT)
+    return {
+        "version":"4.0",
+        "ocr":{"pending":pending,"failed":failed},
+        "inbox":{"path":str(inbox),"queued":len(list(inbox.glob('*'))) if inbox.exists() else 0},
+        "storage":{"total":usage.total,"used":usage.used,"free":usage.free},
+        "telegram":{"configured":bool(os.getenv("TELEGRAM_BOT_TOKEN","").strip())},
+        "last_event":dict(last) if last else None,
+    }
+
+@app.get("/api/activity")
+def activity(limit:int=100):
+    limit=max(1,min(limit,500))
+    with db() as con:
+        rows=[dict(r) for r in con.execute(
+            "SELECT id,action,document_id,source,details,created_at FROM audit_events ORDER BY id DESC LIMIT ?",(limit,)
+        )]
+    return {"items":rows}
 
 @app.post("/api/documents/{did}/share")
 def create_share(did:str,payload:dict=Body(default={})):

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1224">
 <link rel="manifest" href="/manifest.webmanifest">
-<title>Hossein Archive</title>
+<title>Hossein Archive 4.0</title>
 <style>
 :root{
  --bg:#f3f6fb;--card:#fff;--card2:#fafcff;--text:#172033;--muted:#748096;--line:#e4eaf2;
@@ -47,7 +47,7 @@ mark{background:#ffe58b;color:#3d3200;padding:0 2px;border-radius:3px}
 .danger{border:0;background:#fff0f2;color:#b32835}
 .icon{min-width:42px}
 .mobile{display:none}
-.stats{display:grid;grid-template-columns:repeat(6,minmax(100px,1fr));gap:11px;margin-bottom:14px}
+.stats{display:grid;grid-template-columns:repeat(8,minmax(100px,1fr));gap:11px;margin-bottom:14px}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 4px 18px #14223d08}
 .stat b{font-size:22px;display:block;margin-bottom:5px}.stat span{font-size:11px;color:var(--muted)}
 .toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px}
@@ -109,6 +109,7 @@ html[data-theme="dark"] .suggest{background:#12342a;color:#99e5c9;border-color:#
 .share-row{border:1px solid var(--line);border-radius:12px;padding:11px;margin:8px 0}.share-top{display:flex;justify-content:space-between;gap:10px}.share-url{direction:ltr;text-align:left;background:var(--card2);padding:8px;border-radius:8px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:8px}
 .toast{position:fixed;left:22px;bottom:22px;z-index:100;background:#111a2e;color:white;border-radius:12px;padding:12px 15px;box-shadow:0 15px 40px #0004;max-width:420px}
 .drag-overlay{position:fixed;inset:0;z-index:55;background:#1e63e9e6;color:white;display:grid;place-items:center;font-size:25px;font-weight:900;pointer-events:none}
+.system-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.system-card{border:1px solid var(--line);background:var(--card2);padding:13px;border-radius:14px}.system-card b{display:block;margin-bottom:6px}.activity-row{border-bottom:1px solid var(--line);padding:10px 2px}.activity-row:last-child{border-bottom:0}.activity-row small{display:block;color:var(--muted);margin-top:5px;direction:auto}
 @media(max-width:1120px){
  .shell{grid-template-columns:1fr}.sidebar{display:none;position:fixed;right:0;z-index:45;width:250px}.sidebar.open{display:block}.mobile{display:inline-block}
  .main{padding:16px}.stats{grid-template-columns:repeat(3,1fr)}.list-head{display:none}.list-row{grid-template-columns:34px 1fr;padding:15px}.list-row>div:not(:first-child):not(:nth-child(2)):not(:last-child){display:none}.actions{justify-content:flex-start}
@@ -131,8 +132,12 @@ html[data-theme="dark"] .suggest{background:#12342a;color:#99e5c9;border-color:#
  <button class="navbtn" data-scope="uncategorized" onclick="setScope('uncategorized',this)"><span>بدون دسته</span><span id="nOther" class="count">0</span></button>
  <button class="navbtn" data-scope="trash" onclick="setScope('trash',this)"><span>سطل زباله</span><span id="nTrash" class="count">0</span></button>
  <div class="side-sep"></div>
+ <button class="navbtn" onclick="setSource('scanner_folder',this)"><span>اسکنر و پوشه ورودی</span><span id="nScanner" class="count">0</span></button>
+ <button class="navbtn" onclick="setSource('telegram',this)"><span>اسناد تلگرام</span><span id="nTelegram" class="count">0</span></button>
+ <button class="navbtn" onclick="openSystem()"><span>وضعیت و فعالیت‌ها</span><span>●</span></button>
+ <div class="side-sep"></div>
  <button class="navbtn" onclick="openUpload()"><span>＋ افزودن سند</span></button>
- <div class="side-note">فاز اول: ذخیره‌سازی روی سرور 192.168.1.35<br>دسترسی بیرونی: Tailscale</div>
+ <div class="side-note">نسخه حرفه‌ای 4.0<br>سرور: 192.168.1.35<br>ورودی خودکار، OCR و Telegram</div>
 </aside>
 
 <main class="main">
@@ -149,13 +154,15 @@ html[data-theme="dark"] .suggest{background:#12342a;color:#99e5c9;border-color:#
   <div class="stat"><b id="sOther">0</b><span>بدون دسته</span></div>
   <div class="stat"><b id="sProc">0</b><span>در حال پردازش</span></div>
   <div class="stat"><b id="sShare">0</b><span>لینک اشتراک فعال</span></div>
+  <div class="stat"><b id="sScanner">0</b><span>ورودی اسکنر</span></div>
+  <div class="stat"><b id="sTelegram">0</b><span>ورودی تلگرام</span></div>
   <div class="stat"><b id="sSize">0 MB</b><span>حجم آرشیو</span></div>
  </div>
 
  <div class="toolbar">
   <div class="filters">
    <select id="category" onchange="loadDocs()"><option value="">همه دسته‌ها</option></select>
-   <select id="source" onchange="loadDocs()"><option value="">همه منابع</option><option value="upload">آپلود مستقیم</option><option value="google_drive">Google Drive</option></select>
+   <select id="source" onchange="loadDocs()"><option value="">همه منابع</option><option value="upload">آپلود مستقیم</option><option value="scanner_folder">اسکنر و پوشه ورودی</option><option value="telegram">Telegram</option><option value="google_drive">Google Drive</option></select>
    <select id="ocr" onchange="loadDocs()"><option value="">همه وضعیت‌های OCR</option><option value="done">آماده</option><option value="pending">در صف</option><option value="processing">در حال OCR</option><option value="empty">بدون متن</option><option value="failed">خطا</option></select>
    <select id="days" onchange="loadDocs()"><option value="">همه زمان‌ها</option><option value="1">۲۴ ساعت اخیر</option><option value="7">۷ روز اخیر</option><option value="30">۳۰ روز اخیر</option><option value="90">۹۰ روز اخیر</option><option value="365">یک سال اخیر</option></select>
    <select id="sort" onchange="loadDocs()"><option value="newest">جدیدترین</option><option value="oldest">قدیمی‌ترین</option><option value="name">نام</option><option value="size">حجم</option></select>
@@ -252,6 +259,17 @@ html[data-theme="dark"] .suggest{background:#12342a;color:#99e5c9;border-color:#
  </div>
 </div>
 
+<div id="systemModal" class="modal hidden">
+ <div class="modal-card">
+  <div class="modal-head"><h3>وضعیت سامانه و فعالیت‌ها</h3><button class="close" onclick="closeModal('systemModal')">✕</button></div>
+  <div class="modal-body">
+   <div id="systemCards" class="system-grid"></div>
+   <h3 style="margin-top:22px">آخرین فعالیت‌ها</h3>
+   <div id="activityList"></div>
+  </div>
+ </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
 <script>
@@ -273,6 +291,7 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.classList.remove('hid
 function fmtSize(n){n=Number(n)||0;if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB'}
 function fmtDate(s){try{return new Intl.DateTimeFormat('fa-IR',{year:'numeric',month:'short',day:'numeric'}).format(new Date(s))}catch(e){return s}}
 function catName(id){return state.categories.find(x=>x.id===id)?.name||id||'بدون دسته'}
+function sourceName(id){return ({upload:'آپلود مستقیم',google_drive:'Google Drive',scanner_folder:'اسکنر',telegram:'Telegram'})[id]||id||'نامشخص'}
 function ocrBadge(s){const n={done:'آماده',pending:'در صف',processing:'در حال OCR',failed:'خطا',empty:'بدون متن'};return '<span class="badge '+esc(s)+'">'+esc(n[s]||s)+'</span>'}
 function closeModal(id){$(id).classList.add('hidden')}
 function closeAll(){document.querySelectorAll('.modal').forEach(x=>x.classList.add('hidden'));$('viewer').src='about:blank'}
@@ -288,8 +307,8 @@ async function boot(){
 async function refreshAll(){await Promise.all([loadStats(),loadDocs()])}
 async function loadStats(){
  const s=await api('/api/stats');state.stats=s;
- $('sDocs').textContent=s.documents;$('sFav').textContent=s.favorites;$('sOther').textContent=s.uncategorized;$('sProc').textContent=s.processing;$('sShare').textContent=s.shares||0;$('sSize').textContent=fmtSize(s.storage);
- $('nAll').textContent=s.documents;$('nFav').textContent=s.favorites;$('nOther').textContent=s.uncategorized;$('nTrash').textContent=s.trash
+ $('sDocs').textContent=s.documents;$('sFav').textContent=s.favorites;$('sOther').textContent=s.uncategorized;$('sProc').textContent=s.processing;$('sShare').textContent=s.shares||0;$('sScanner').textContent=s.scanner||0;$('sTelegram').textContent=s.telegram||0;$('sSize').textContent=fmtSize(s.storage);
+ $('nAll').textContent=s.documents;$('nFav').textContent=s.favorites;$('nOther').textContent=s.uncategorized;$('nTrash').textContent=s.trash;$('nScanner').textContent=s.scanner||0;$('nTelegram').textContent=s.telegram||0
 }
 async function loadDocs(){
  const u=new URL('/api/documents',location.origin);
@@ -298,6 +317,18 @@ async function loadDocs(){
  const d=await api(u);state.docs=d.items;$('resultInfo').textContent=d.count+' سند'+(vals.q?' برای «'+vals.q+'»':'');syncSelection();render()
 }
 function setScope(scope,btn){state.scope=scope;clearSelection();document.querySelectorAll('.navbtn[data-scope]').forEach(x=>x.classList.remove('active'));btn.classList.add('active');loadDocs();if(innerWidth<1120)sidebar.classList.remove('open')}
+function setSource(source,btn){state.scope='all';clearSelection();document.querySelectorAll('.navbtn').forEach(x=>x.classList.remove('active'));btn.classList.add('active');$('source').value=source;loadDocs();if(innerWidth<1120)sidebar.classList.remove('open')}
+async function openSystem(){
+ const [s,a]=await Promise.all([api('/api/system/status'),api('/api/activity?limit=100')]);
+ $('systemCards').innerHTML=[
+  ['نسخه سامانه',s.version],['صف OCR',s.ocr.pending+' در صف · '+s.ocr.failed+' خطا'],
+  ['پوشه اسکنر',s.inbox.queued+' فایل منتظر'],['بات تلگرام',s.telegram.configured?'پیکربندی شده':'نیازمند Token'],
+  ['فضای مصرف‌شده',fmtSize(s.storage.used)],['فضای آزاد',fmtSize(s.storage.free)]
+ ].map(x=>'<div class="system-card"><b>'+esc(x[0])+'</b><span>'+esc(x[1])+'</span></div>').join('');
+ const names={document_ingested:'ورود سند',document_updated:'ویرایش سند',document_trashed:'انتقال به سطل',document_restored:'بازیابی سند'};
+ $('activityList').innerHTML=a.items.length?a.items.map(x=>'<div class="activity-row"><b>'+esc(names[x.action]||x.action)+'</b> · '+esc(x.source)+'<small>'+esc(x.details||'')+' · '+fmtDate(x.created_at)+'</small></div>').join(''):'<div class="empty">هنوز فعالیتی ثبت نشده است.</div>';
+ $('systemModal').classList.remove('hidden')
+}
 function clearFilters(){$('search').value='';$('category').value='';$('source').value='';$('ocr').value='';$('days').value='';$('sort').value='newest';loadDocs()}
 function setView(v,re=true){state.view=v;localStorage.setItem('archiveView',v);$('vList').classList.toggle('active',v==='list');$('vGrid').classList.toggle('active',v==='grid');if(re)render()}
 function renderChips(){
@@ -319,7 +350,7 @@ function render(){
 }
 function rowHtml(d){
  const trash=state.scope==='trash',q=$('search').value.trim(),checked=state.selected.has(d.id)?'checked':'';
- return '<div class="list-row"><div><input class="check" type="checkbox" '+checked+' onchange="toggleSelect(\''+d.id+'\',this.checked)"></div><div><div class="title" onclick="openDoc(\''+d.id+'\')">'+highlight(d.title,q)+'</div><div class="sub">'+esc(d.original_name)+' · '+(d.source==='google_drive'?'Google Drive':'آپلود مستقیم')+'</div>'+(d.snippet?'<div class="snippet">'+highlight(d.snippet,q)+'</div>':'')+'</div>'+
+ return '<div class="list-row"><div><input class="check" type="checkbox" '+checked+' onchange="toggleSelect(\''+d.id+'\',this.checked)"></div><div><div class="title" onclick="openDoc(\''+d.id+'\')">'+highlight(d.title,q)+'</div><div class="sub">'+esc(d.original_name)+' · '+esc(sourceName(d.source))+'</div>'+(d.snippet?'<div class="snippet">'+highlight(d.snippet,q)+'</div>':'')+'</div>'+
  '<div><span class="badge">'+esc(catName(d.category))+'</span></div><div>'+ocrBadge(d.ocr_status)+'</div><div>'+fmtSize(d.size)+'</div><div>'+fmtDate(d.created_at)+'</div><div class="actions">'+
  (trash?'<button class="smallbtn success" onclick="restoreDoc(\''+d.id+'\')">بازیابی</button><button class="smallbtn danger" onclick="permanentDelete(\''+d.id+'\')">حذف قطعی</button>':
  '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">مشاهده</button><button class="smallbtn" onclick="shareDoc(\''+d.id+'\')">اشتراک</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button><button class="smallbtn danger" onclick="trashDoc(\''+d.id+'\')">حذف</button>')+'</div></div>'
@@ -327,7 +358,7 @@ function rowHtml(d){
 function cardHtml(d){
  const trash=state.scope==='trash',checked=state.selected.has(d.id)?'checked':'';
  const preview=d.has_preview?'<img loading="lazy" src="/api/documents/'+d.id+'/preview" alt="">':'<div class="fileicon">'+(d.mime==='application/pdf'?'PDF':'IMG')+'</div>';
- return '<article class="card"><label class="cardcheck"><input class="check" type="checkbox" '+checked+' onchange="toggleSelect(\''+d.id+'\',this.checked)"></label><div class="thumb" onclick="openDoc(\''+d.id+'\')">'+preview+'<span class="sourcechip">'+(d.source==='google_drive'?'Drive':'Local')+'</span></div><div class="cardbody"><div class="cardtitle" onclick="openDoc(\''+d.id+'\')">'+highlight(d.title,$('search').value.trim())+'</div><div class="sub">'+esc(d.original_name)+'</div><div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap"><span class="badge">'+esc(catName(d.category))+'</span>'+ocrBadge(d.ocr_status)+'</div><div class="cardmeta"><span>'+fmtSize(d.size)+'</span><span>'+fmtDate(d.created_at)+'</span></div><div class="cardactions">'+
+ return '<article class="card"><label class="cardcheck"><input class="check" type="checkbox" '+checked+' onchange="toggleSelect(\''+d.id+'\',this.checked)"></label><div class="thumb" onclick="openDoc(\''+d.id+'\')">'+preview+'<span class="sourcechip">'+esc(sourceName(d.source))+'</span></div><div class="cardbody"><div class="cardtitle" onclick="openDoc(\''+d.id+'\')">'+highlight(d.title,$('search').value.trim())+'</div><div class="sub">'+esc(d.original_name)+'</div><div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap"><span class="badge">'+esc(catName(d.category))+'</span>'+ocrBadge(d.ocr_status)+'</div><div class="cardmeta"><span>'+fmtSize(d.size)+'</span><span>'+fmtDate(d.created_at)+'</span></div><div class="cardactions">'+
  (trash?'<button class="smallbtn success" onclick="restoreDoc(\''+d.id+'\')">بازیابی</button><button class="smallbtn danger" onclick="permanentDelete(\''+d.id+'\')">حذف قطعی</button>':
  '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">مشاهده</button><button class="smallbtn" onclick="shareDoc(\''+d.id+'\')">اشتراک</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button>')+'</div></div></article>'
 }
@@ -350,7 +381,7 @@ async function exportSelected(){
 
 async function openDoc(id){
  const d=await api('/api/documents/'+id);state.current=d;
- $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=d.source==='google_drive'?'Google Drive':'آپلود مستقیم';$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
+ $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
  const s=$('pSuggest');s.innerHTML=(d.suggested_title&&d.suggested_title!==d.title)?'<div class="suggest"><b>پیشنهاد عنوان</b><div>'+esc(d.suggested_title)+'</div><button class="btn success" style="margin-top:8px" onclick="applySuggestion()">اعمال پیشنهاد</button></div>':'';
  $('viewer').src='/api/documents/'+id+'/file';$('previewModal').classList.remove('hidden')
 }
