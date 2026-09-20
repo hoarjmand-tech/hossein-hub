@@ -1,0 +1,63 @@
+services:
+  archive:
+    build: ./archive_v2
+    container_name: hossein-archive
+    restart: unless-stopped
+    environment:
+      ARCHIVE_ROOT: /data
+      DRIVE_PUSH_TOKEN_FILE: /run/secrets/drive_push_token
+      COOKIE_SECURE: "false"
+      MAX_UPLOAD_MB: "100"
+      PUBLIC_BASE_URL: "https://hossein-hub.tailf8fccb.ts.net"
+    secrets:
+      - drive_push_token
+    volumes:
+      - ./archive_data:/data
+    ports:
+      - "0.0.0.0:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: hossein-hub-tailscale
+    hostname: hossein-hub
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      TS_AUTH_ONCE: "true"
+    volumes:
+      - ./data/tailscale:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+
+secrets:
+  drive_push_token:
+    file: ./secrets/drive_push_token
+
+  ocr-worker:
+    build:
+      context: ./ocr-worker
+    container_name: hossein-hub-ocr-worker
+    restart: unless-stopped
+    depends_on:
+      - archive
+    environment:
+      ARCHIVE_API: http://archive:8080
+
+  ocr-worker:
+    build:
+      context: ./ocr-worker
+    container_name: hossein-hub-ocr-worker
+    restart: unless-stopped
+    depends_on:
+      - archive
+    environment:
+      ARCHIVE_API: http://archive:8080

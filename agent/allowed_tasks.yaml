@@ -1,0 +1,7 @@
+allowed:
+  - status
+  - docker_status
+  - docker_restart
+  - docker_logs
+  - backup
+  - disk_check

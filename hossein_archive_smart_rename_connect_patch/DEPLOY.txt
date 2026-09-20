@@ -1,0 +1,7 @@
+Run:
+
+chmod +x apply_smart_rename_connect.sh
+
+./apply_smart_rename_connect.sh
+
+This connects the analyzer module to the archive service rebuild process.

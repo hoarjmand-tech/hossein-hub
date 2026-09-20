@@ -1,0 +1,62 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hossein-hub-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      TZ: ${TZ}
+
+    secrets:
+      - postgres_password
+
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+
+    networks:
+      - hub-backend
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  backend:
+    build:
+      context: ./app/backend
+
+    container_name: hossein-hub-backend
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "192.168.1.35:8080:8000"
+
+    networks:
+      - hub-backend
+
+    volumes:
+      - ./archive:/archive
+      - ./data:/data
+
+    environment:
+      TZ: ${TZ}
+
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+
+
+networks:
+  hub-backend:
+    name: hossein-hub-backend

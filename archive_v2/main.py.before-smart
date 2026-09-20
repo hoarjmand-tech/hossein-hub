@@ -1,4 +1,3 @@
-from document_analyzer import analyze_document
 import hashlib
 import hmac
 import json
@@ -354,43 +353,13 @@ def process_one():
         make_preview(path,row["mime"],row["id"])
         text=extract_ocr(path,row["mime"])
         meta=smart_metadata(text)
-        analysis=analyze_document(text,row["original_name"])
         title=row["title"]
         if is_generic_title(title) and meta["suggested_title"] and meta["confidence"]>=0.70:
             title=meta["suggested_title"]
         status="done" if text else "empty"
         with db() as con:
-            con.execute("""UPDATE documents SET 
-title=?,
-ocr_text=?,
-ocr_status=?,
-category=?,
-suggested_title=?,
-suggestion_conf=?,
-smart_filename=?,
-description_fa=?,
-description_de=?,
-document_type=?,
-ai_confidence=?,
-extracted_entities=?,
-updated_at=?
-WHERE id=?""",
-                        (
-                        title,
-                        text,
-                        status,
-                        meta["category"],
-                        analysis["smart_filename"],
-                        analysis["ai_confidence"],
-                        analysis["smart_filename"],
-                        analysis["description_fa"],
-                        analysis["description_de"],
-                        analysis["document_type"],
-                        analysis["ai_confidence"],
-                        analysis["extracted_entities"],
-                        now(),
-                        row["id"]
-                        ))
+            con.execute("""UPDATE documents SET title=?,ocr_text=?,ocr_status=?,category=?,suggested_title=?,suggestion_conf=?,updated_at=? WHERE id=?""",
+                        (title,text,status,meta["category"],meta["suggested_title"],meta["confidence"],now(),row["id"]))
             fresh=con.execute("SELECT * FROM documents WHERE id=?",(row["id"],)).fetchone()
             fts_upsert(con,fresh)
     except Exception as e:
