@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hossein Control</title>
+<meta charset="utf-8">
+<style>
+body{
+font-family:Arial;
+background:#111;
+color:#eee;
+padding:30px;
+}
+button{
+padding:12px;
+margin:5px;
+cursor:pointer;
+}
+pre{
+background:#222;
+padding:15px;
+border-radius:8px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Hossein Control Center</h1>
+
+<button onclick="run('status')">Docker Status</button>
+<button onclick="run('health')">Health</button>
+<button onclick="run('backup')">Backup</button>
+<button onclick="run('docker_restart')">Restart</button>
+
+<pre id="out">Ready...</pre>
+
+
+<script>
+
+async function run(task){
+
+let token="197b1b0b684d359b1901efdef5a36b770505e3b7799d3f61c1b9983105992c58";
+
+let r=await fetch(
+"http://127.0.0.1:9000",
+{
+method:"POST",
+headers:{
+"X-Agent-Token":token,
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+task:task
+})
+}
+);
+
+let j=await r.json();
+
+document.getElementById("out").textContent=
+JSON.stringify(j,null,2);
+
+}
+
+</script>
+
+</body>
+</html>
