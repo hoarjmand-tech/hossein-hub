@@ -1,0 +1,3 @@
+bind: "127.0.0.1"
+port: 9000
+token: "dafceaac8069927a34e0c494cb41c37ca65f65c1a3a8471fc4905151bb0aa68d"
