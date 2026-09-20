@@ -23,7 +23,7 @@ from fastapi import Body, Cookie, FastAPI, File, Header, HTTPException, Request,
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.background import BackgroundTask
 from pypdf import PdfReader
-from PIL import Image
+from PIL import Image, ImageFilter, ImageOps
 
 ROOT=Path(os.getenv("ARCHIVE_ROOT","/data"))
 FILES=ROOT/"files"
@@ -131,6 +131,8 @@ def init_db():
             con.execute("ALTER TABLE documents ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
         document_migrations={
             "smart_filename":"TEXT NOT NULL DEFAULT ''",
+            "source_name":"TEXT NOT NULL DEFAULT ''",
+            "filename_locked":"INTEGER NOT NULL DEFAULT 0",
             "description_fa":"TEXT NOT NULL DEFAULT ''",
             "description_de":"TEXT NOT NULL DEFAULT ''",
             "document_type":"TEXT NOT NULL DEFAULT ''",
@@ -140,6 +142,7 @@ def init_db():
         for column,declaration in document_migrations.items():
             if column not in dcols:
                 con.execute(f"ALTER TABLE documents ADD COLUMN {column} {declaration}")
+        con.execute("UPDATE documents SET source_name=original_name WHERE source_name='' OR source_name IS NULL")
         scols={r["name"] for r in con.execute("PRAGMA table_info(shares)")}
         if "max_downloads" not in scols:
             con.execute("ALTER TABLE shares ADD COLUMN max_downloads INTEGER NOT NULL DEFAULT 0")
@@ -295,23 +298,49 @@ def ingest_upload(upload:UploadFile,source="upload"):
     did=str(uuid.uuid4());ts=now();title=base_title(name)
     with db() as con:
         con.execute("""INSERT INTO documents
-          (id,title,original_name,stored_name,mime,size,sha256,ocr_status,ocr_text,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-          (did,title,name,saved["stored"],saved["mime"],saved["size"],saved["sha256"],"pending","","other","",None,0,0,0,source,ts,ts))
+          (id,title,original_name,source_name,stored_name,mime,size,sha256,ocr_status,ocr_text,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+          (did,title,name,name,saved["stored"],saved["mime"],saved["size"],saved["sha256"],"pending","","other","",None,0,0,0,source,ts,ts))
         row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
         fts_upsert(con,row)
     audit("document_ingested",did,source,name)
     return {"ok":True,"duplicate":False,"id":did,"name":name,"bytes":saved["size"],"queued":True}
 
-def tesseract_text(path,langs):
-    try:
-        raw=subprocess.check_output(
-            ["tesseract",str(path),"stdout","-l",langs,"--oem","1","--psm","6"],
-            stderr=subprocess.DEVNULL,text=True,timeout=90
-        )
-        return raw.strip()
-    except Exception:
-        return ""
+def prepare_ocr_image(path,out):
+    with Image.open(path) as source:
+        image=ImageOps.exif_transpose(source).convert("L")
+        width,height=image.size
+        longest=max(width,height)
+        if longest<2200:
+            scale=2200/longest
+            image=image.resize((max(1,int(width*scale)),max(1,int(height*scale))),Image.Resampling.LANCZOS)
+        elif longest>4200:
+            scale=4200/longest
+            image=image.resize((max(1,int(width*scale)),max(1,int(height*scale))),Image.Resampling.LANCZOS)
+        image=ImageOps.autocontrast(image,cutoff=1)
+        image=image.filter(ImageFilter.MedianFilter(size=3))
+        image=image.filter(ImageFilter.UnsharpMask(radius=1.5,percent=160,threshold=3))
+        image.save(out,"PNG",optimize=True,dpi=(300,300))
+
+def tesseract_text(path,langs="fas+eng+deu"):
+    with tempfile.TemporaryDirectory() as td:
+        prepared=Path(td)/"ocr.png"
+        try:
+            prepare_ocr_image(path,prepared)
+        except Exception:
+            prepared=path
+        best=""
+        for psm in (6,3):
+            try:
+                raw=subprocess.check_output(
+                    ["tesseract",str(prepared),"stdout","-l",langs,"--oem","1","--psm",str(psm),"--dpi","300"],
+                    stderr=subprocess.DEVNULL,text=True,timeout=120
+                ).strip()
+                if len(raw)>len(best):best=raw
+                if len(raw)>=80:break
+            except Exception:
+                continue
+        return best
 
 def pdf_native(path):
     try:
@@ -336,15 +365,11 @@ def extract_ocr(path,mime):
                 return ""
             images=sorted(Path(td).glob("page-*.png"))
             for img in images:
-                fa=tesseract_text(img,"fas")
-                lat=tesseract_text(img,"eng+deu")
-                if fa:texts.append(fa)
-                if lat:texts.append(lat)
+                result=tesseract_text(img)
+                if result:texts.append(result)
     elif mime.startswith("image/"):
-        fa=tesseract_text(path,"fas")
-        lat=tesseract_text(path,"eng+deu")
-        if fa:texts.append(fa)
-        if lat:texts.append(lat)
+        result=tesseract_text(path)
+        if result:texts.append(result)
     return "\n".join(texts)
 
 def normalize(text):
@@ -393,13 +418,19 @@ def process_one():
         text=extract_ocr(path,row["mime"])
         meta=smart_metadata(text)
         analysis=analyze_document(text,row["original_name"])
+        category=analysis["category"] if analysis["category"]!="other" else meta["category"]
+        suggested_title=analysis["suggested_title"] if analysis["document_type"]!="سند" else meta["suggested_title"]
+        confidence=max(analysis["ai_confidence"],meta["confidence"])
         title=row["title"]
-        if is_generic_title(title) and meta["suggested_title"] and meta["confidence"]>=0.70:
-            title=meta["suggested_title"]
+        if is_generic_title(title) and suggested_title and confidence>=0.48:
+            title=suggested_title
+        auto_rename=bool(text and analysis["document_type"]!="سند" and analysis["ai_confidence"]>=0.45 and not row["filename_locked"])
+        display_name=analysis["smart_filename"] if auto_rename else row["original_name"]
         status="done" if text else "empty"
         with db() as con:
             con.execute("""UPDATE documents SET 
 title=?,
+original_name=?,
 ocr_text=?,
 ocr_status=?,
 category=?,
@@ -415,11 +446,12 @@ updated_at=?
 WHERE id=?""",
                         (
                         title,
+                        display_name,
                         text,
                         status,
-                        meta["category"],
-                        analysis["smart_filename"],
-                        analysis["ai_confidence"],
+                        category,
+                        suggested_title,
+                        confidence,
                         analysis["smart_filename"],
                         analysis["description_fa"],
                         analysis["description_de"],
@@ -431,6 +463,8 @@ WHERE id=?""",
                         ))
             fresh=con.execute("SELECT * FROM documents WHERE id=?",(row["id"],)).fetchone()
             fts_upsert(con,fresh)
+        if auto_rename and display_name!=row["original_name"]:
+            audit("document_auto_renamed",row["id"],"ocr",f'{row["original_name"]} -> {display_name}')
     except Exception as e:
         with db() as con:
             con.execute("UPDATE documents SET ocr_status='failed',updated_at=? WHERE id=?",(now(),row["id"]))
@@ -453,13 +487,13 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="4.1",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="4.2",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"4.1","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"4.2","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
@@ -565,7 +599,7 @@ def update_document(did:str,payload:dict=Body(...)):
             requested_stem=Path(requested).stem.strip(" .-_")
             if not requested_stem:raise HTTPException(400,"Invalid filename")
             v=(requested_stem+original_ext)[:240]
-            updates.extend(["original_name=?","smart_filename=?"]);args.extend([v,v])
+            updates.extend(["original_name=?","smart_filename=?","filename_locked=1"]);args.extend([v,v])
             continue
         updates.append(f"{k}=?");args.append(v)
     if not updates:return {"ok":True}
@@ -587,6 +621,22 @@ def apply_suggestion(did:str):
         con.execute("UPDATE documents SET title=?,updated_at=? WHERE id=?",(row["suggested_title"],now(),did))
         row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone();fts_upsert(con,row)
     return {"ok":True}
+
+@app.post("/api/documents/{did}/apply-smart-filename")
+def apply_smart_filename(did:str):
+    with db() as con:
+        row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
+        if not row:raise HTTPException(404)
+        filename=clean_filename(row["smart_filename"] or "")
+        if not filename:raise HTTPException(400,"No OCR filename suggestion")
+        con.execute(
+            "UPDATE documents SET original_name=?,filename_locked=0,updated_at=? WHERE id=?",
+            (filename,now(),did)
+        )
+        fresh=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
+        fts_upsert(con,fresh)
+    audit("document_auto_renamed",did,"web",filename)
+    return {"ok":True,"filename":filename}
 
 @app.delete("/api/documents/{did}")
 def trash_document(did:str):
@@ -628,12 +678,16 @@ def preview_file(did:str):
     return FileResponse(out,media_type="image/jpeg",headers={"Cache-Control":"private,max-age=3600"})
 
 @app.post("/api/documents/{did}/retry-ocr")
-def retry_ocr(did:str):
+def retry_ocr(did:str,payload:dict=Body(default={})):
+    auto_rename=bool(payload.get("auto_rename",True))
     with db() as con:
         row=con.execute("SELECT id FROM documents WHERE id=?",(did,)).fetchone()
         if not row:raise HTTPException(404)
-        con.execute("UPDATE documents SET ocr_status='pending',updated_at=? WHERE id=?",(now(),did))
-    return {"ok":True}
+        con.execute(
+            "UPDATE documents SET ocr_status='pending',filename_locked=CASE WHEN ? THEN 0 ELSE filename_locked END,updated_at=? WHERE id=?",
+            (1 if auto_rename else 0,now(),did)
+        )
+    return {"ok":True,"auto_rename":auto_rename}
 
 @app.get("/api/documents/{did}/file")
 def file_view(did:str,download:int=0):
@@ -658,7 +712,7 @@ def system_status():
         last=con.execute("SELECT created_at,action,source,details FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
     usage=shutil.disk_usage(ROOT)
     return {
-        "version":"4.1",
+        "version":"4.2",
         "ocr":{"pending":pending,"failed":failed},
         "inbox":{"path":str(inbox),"queued":len(list(inbox.glob('*'))) if inbox.exists() else 0},
         "storage":{"total":usage.total,"used":usage.used,"free":usage.free},

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1224">
 <link rel="manifest" href="/manifest.webmanifest">
-<title>Hossein Archive 4.1</title>
+<title>Hossein Archive 4.2</title>
 <style>
 :root{
  --bg:#f3f6fb;--card:#fff;--card2:#fafcff;--text:#172033;--muted:#748096;--line:#e4eaf2;
@@ -169,6 +169,15 @@ select{border-radius:8px;padding:7px 8px;font-size:11px;max-width:170px}
 .preview-card{width:min(1220px,97vw);height:min(820px,95vh);grid-template-columns:minmax(0,1fr) 310px}
 .meta{padding:14px}.meta-block{margin-top:11px}.meta-actions{gap:5px;margin-top:13px}
 .ocrbox{max-height:130px}.system-card{padding:9px;border-radius:10px}
+.preview-card{width:min(940px,96vw);height:min(690px,92vh);grid-template-columns:360px minmax(0,1fr);grid-template-rows:auto 1fr}
+.preview-pane{background:var(--card2);padding:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-width:0}
+.preview-frame{width:min(100%,320px);height:min(430px,58vh);border:1px solid var(--line);border-radius:13px;background:#e8edf4;display:grid;place-items:center;overflow:hidden;cursor:zoom-in;box-shadow:0 6px 20px #0c193018;position:relative}
+.preview-frame img{width:100%;height:100%;object-fit:contain;display:block;background:white}
+.preview-fallback{padding:25px;text-align:center;color:var(--muted);line-height:1.9}.preview-fallback b{font-size:30px;display:block;color:#728099}
+.preview-commands{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.filename-suggest{border:1px solid #a9c5fa;background:#f2f6ff;color:#274b88;padding:10px;border-radius:10px;margin-top:10px;word-break:break-word}
+.filename-suggest b{display:block;margin-bottom:5px}.filename-suggest small{display:block;opacity:.75;margin-top:4px}
+html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;border-color:#31558e}
 @media(max-width:1120px){
  .shell,.shell.menu-mini{grid-template-columns:1fr}.sidebar{width:230px;box-shadow:-12px 0 35px #0004}.menu-mini .logo{display:grid}.menu-mini .brand>div:nth-child(2),.menu-mini .nav-label,.menu-mini .nav-group,.menu-mini .side-note,.menu-mini .count{display:initial}.menu-mini .menu-toggle{position:static;margin-right:auto}.menu-mini .navbtn{justify-content:flex-start;padding:8px 9px}
  .main{padding:12px}.stats{grid-template-columns:repeat(4,1fr)}
@@ -176,7 +185,7 @@ select{border-radius:8px;padding:7px 8px;font-size:11px;max-width:170px}
 @media(max-width:650px){
  html,body{font-size:12px}.main{padding:8px}.topbar{gap:5px}.topbar .primary{padding-inline:9px}.search .shortcut{display:none}.stats{display:flex;overflow:auto;scroll-snap-type:x mandatory;padding-bottom:3px}.stat{min-width:92px;scroll-snap-align:start}
  .filters{display:flex;overflow:auto;flex-wrap:nowrap;padding-bottom:3px}.filters select{min-width:128px}.toolbar{align-items:stretch}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.thumb{height:105px}.cardbody{padding:8px}.cardactions .smallbtn{font-size:9px}
- .preview-card{grid-template-rows:auto 49vh auto}.modal-head{padding:10px 12px}.meta{padding:12px}
+ .preview-card{grid-template-columns:1fr;grid-template-rows:auto 255px auto;height:100vh}.preview-pane{padding:9px}.preview-frame{width:170px;height:205px}.preview-commands{position:absolute;left:8px;top:54px;flex-direction:column}.preview-commands .btn{font-size:9px;padding:6px}.modal-head{padding:10px 12px}.meta{padding:12px}
 }
 </style>
 </head>
@@ -197,7 +206,7 @@ select{border-radius:8px;padding:7px 8px;font-size:11px;max-width:170px}
  <div class="nav-group">مدیریت</div>
  <button class="navbtn" onclick="openSystem()" title="وضعیت و فعالیت‌ها"><span class="nav-icon">◉</span><span class="nav-label">وضعیت سامانه</span></button>
  <button class="navbtn" onclick="openUpload()" title="افزودن سند"><span class="nav-icon">＋</span><span class="nav-label">افزودن سند</span></button>
- <div class="side-note">نسخه 4.1 · سرور 192.168.1.35<br>OCR · Scanner · Telegram</div>
+ <div class="side-note">نسخه 4.2 · سرور 192.168.1.35<br>OCR · Scanner · Telegram</div>
 </aside>
 
 <main class="main">
@@ -284,10 +293,17 @@ select{border-radius:8px;padding:7px 8px;font-size:11px;max-width:170px}
 <div id="previewModal" class="modal hidden">
  <div class="modal-card preview-card">
   <div class="modal-head"><h3>مشاهده سند</h3><button class="close" onclick="closePreview()">✕</button></div>
-  <div class="viewer"><iframe id="viewer"></iframe></div>
+  <section class="preview-pane">
+   <div class="preview-frame" onclick="openCurrentNewTab()" title="برای مشاهده نسخه کامل کلیک کنید">
+    <img id="previewImage" alt="پیش‌نمایش سند">
+    <div id="previewFallback" class="preview-fallback hidden"><b>▧</b>پیش‌نمایش هنوز آماده نیست.<br>نسخه کامل را باز کنید.</div>
+   </div>
+   <div class="preview-commands"><button class="btn primary" onclick="openCurrentNewTab()">مشاهده کامل</button><button class="btn" onclick="downloadCurrent()">دانلود</button></div>
+  </section>
   <aside class="meta">
    <h3 id="pTitle"></h3><small id="pOriginal"></small>
    <div id="pSuggest"></div>
+   <div id="pFilenameSuggest"></div>
    <div class="meta-block"><div class="meta-label">دسته</div><div id="pCategory"></div></div>
    <div class="meta-block"><div class="meta-label">وضعیت OCR</div><div id="pOcr"></div></div>
    <div class="meta-block"><div class="meta-label">برچسب‌ها</div><div id="pTags">—</div></div>
@@ -297,9 +313,8 @@ select{border-radius:8px;padding:7px 8px;font-size:11px;max-width:170px}
    <div class="meta-actions">
     <button class="btn primary" onclick="openShareCurrent()">اشتراک‌گذاری</button>
     <button class="btn" onclick="editCurrent()">ویرایش</button>
-    <button class="btn" onclick="retryCurrent()">OCR مجدد</button>
-    <button class="btn" onclick="openCurrentNewTab()">باز کردن در تب جدید</button>
-    <button class="btn" onclick="downloadCurrent()">دانلود</button>
+    <button class="btn" onclick="retryCurrent()">OCR و نام‌گذاری مجدد</button>
+    <button class="btn" onclick="openCurrentNewTab()">نسخه کامل</button>
     <button class="btn" onclick="toggleCurrentFav()">★ علاقه‌مندی</button>
    </div>
   </aside>
@@ -361,7 +376,7 @@ function catName(id){return state.categories.find(x=>x.id===id)?.name||id||'بد
 function sourceName(id){return ({upload:'آپلود مستقیم',google_drive:'Google Drive',scanner_folder:'اسکنر',telegram:'Telegram'})[id]||id||'نامشخص'}
 function ocrBadge(s){const n={done:'آماده',pending:'در صف',processing:'در حال OCR',failed:'خطا',empty:'بدون متن'};return '<span class="badge '+esc(s)+'">'+esc(n[s]||s)+'</span>'}
 function closeModal(id){$(id).classList.add('hidden')}
-function closeAll(){document.querySelectorAll('.modal').forEach(x=>x.classList.add('hidden'));$('viewer').src='about:blank'}
+function closeAll(){document.querySelectorAll('.modal').forEach(x=>x.classList.add('hidden'));$('previewImage').removeAttribute('src')}
 function searchChanged(){saveRecentSearch();clearTimeout(state.timer);state.timer=setTimeout(loadDocs,220)}
 
 async function boot(){
@@ -450,16 +465,23 @@ async function openDoc(id){
  const d=await api('/api/documents/'+id);state.current=d;
  $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
  const s=$('pSuggest');s.innerHTML=(d.suggested_title&&d.suggested_title!==d.title)?'<div class="suggest"><b>پیشنهاد عنوان</b><div>'+esc(d.suggested_title)+'</div><button class="btn success" style="margin-top:8px" onclick="applySuggestion()">اعمال پیشنهاد</button></div>':'';
- $('viewer').src='/api/documents/'+id+'/file';$('previewModal').classList.remove('hidden')
+ const fs=$('pFilenameSuggest');
+ if(d.smart_filename&&d.smart_filename!==d.original_name){fs.innerHTML='<div class="filename-suggest"><b>نام پیشنهادی OCR</b><div dir="auto">'+esc(d.smart_filename)+'</div><small>بر اساس تاریخ، نوع سند، صادرکننده و شماره مرجع</small><button class="btn primary" style="margin-top:8px" onclick="applySmartFilename()">اعمال این نام</button></div>'}
+ else if(d.source_name&&d.source_name!==d.original_name){fs.innerHTML='<div class="suggest"><b>✓ نام‌گذاری خودکار انجام شد</b><div dir="auto">'+esc(d.original_name)+'</div><small>نام اولیه: '+esc(d.source_name)+'</small></div>'}
+ else fs.innerHTML='';
+ const image=$('previewImage'),fallback=$('previewFallback');image.classList.remove('hidden');fallback.classList.add('hidden');
+ image.onload=()=>{image.classList.remove('hidden');fallback.classList.add('hidden')};image.onerror=()=>{image.classList.add('hidden');fallback.classList.remove('hidden')};
+ image.src='/api/documents/'+id+'/preview?v='+encodeURIComponent(d.updated_at||'');$('previewModal').classList.remove('hidden')
 }
-function closePreview(){$('viewer').src='about:blank';closeModal('previewModal')}
+function closePreview(){$('previewImage').removeAttribute('src');closeModal('previewModal')}
 async function applySuggestion(){await api('/api/documents/'+state.current.id+'/apply-suggestion',{method:'POST'});toast('عنوان پیشنهادی اعمال شد');closePreview();refreshAll()}
+async function applySmartFilename(){if(!state.current)return;const id=state.current.id;await api('/api/documents/'+id+'/apply-smart-filename',{method:'POST'});toast('نام پیشنهادی OCR اعمال شد');await openDoc(id);refreshAll()}
 function editCurrent(){const d=state.current;if(!d)return;closePreview();$('eTitle').value=d.title||'';$('eFilename').value=d.original_name||'';$('eCategory').value=d.category||'other';$('eTags').value=d.tags||'';$('eNotes').value=d.notes||'';$('editModal').classList.remove('hidden')}
 async function quickEdit(id){state.current=await api('/api/documents/'+id);editCurrent()}
 async function saveEdit(){const d=state.current;if(!d)return;const filename=$('eFilename').value.trim();if(!filename){toast('نام فایل نمی‌تواند خالی باشد');return}await api('/api/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('eTitle').value.trim(),filename,category:$('eCategory').value,tags:$('eTags').value.trim(),notes:$('eNotes').value.trim()})});closeModal('editModal');toast('عنوان و نام فایل ذخیره شد');const t=await api('/api/tags');state.tags=t.items;renderChips();refreshAll()}
 async function toggleFav(id,v){await api('/api/documents/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({favorite:!!v})});refreshAll()}
 async function toggleCurrentFav(){if(!state.current)return;await toggleFav(state.current.id,!state.current.favorite);state.current.favorite=!state.current.favorite;toast('علاقه‌مندی تغییر کرد')}
-async function retryCurrent(){if(!state.current)return;await api('/api/documents/'+state.current.id+'/retry-ocr',{method:'POST'});toast('سند برای OCR مجدد وارد صف شد');closePreview();refreshAll()}
+async function retryCurrent(){if(!state.current)return;await api('/api/documents/'+state.current.id+'/retry-ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto_rename:true})});toast('OCR و نام‌گذاری خودکار وارد صف شد');closePreview();refreshAll()}
 function downloadCurrent(){if(state.current)location.href='/api/documents/'+state.current.id+'/file?download=1'}
 function openCurrentNewTab(){if(state.current)window.open('/api/documents/'+state.current.id+'/file','_blank')}
 async function copyOcr(){if(state.current)await copyText(state.current.ocr_text||'')}
