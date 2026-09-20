@@ -34,6 +34,12 @@ if [[ ! -f .env ]]; then
   echo "Created $PROJECT/.env. Telegram is idle until its token is added."
 fi
 
+# Migrate the previous LAN default without changing a custom public URL.
+if grep -q '^PUBLIC_BASE_URL=http://192\.168\.1\.35:8080$' .env; then
+  sed -i 's#^PUBLIC_BASE_URL=.*#PUBLIC_BASE_URL=http://192.168.1.35:8188#' .env
+  echo "Updated default PUBLIC_BASE_URL to port 8188"
+fi
+
 if [[ ! -f secrets/drive_push_token ]]; then
   umask 077
   python3 - <<'PY' > secrets/drive_push_token
@@ -52,12 +58,12 @@ docker compose up -d --remove-orphans
 
 echo "===== HEALTH ====="
 for attempt in $(seq 1 40); do
-  if curl -fsS http://127.0.0.1:8080/health >/tmp/hossein-archive-health.json 2>/dev/null; then
+  if curl -fsS http://127.0.0.1:8188/health >/tmp/hossein-archive-health.json 2>/dev/null; then
     cat /tmp/hossein-archive-health.json
     echo
     docker compose ps
     echo "DEPLOY COMPLETED SUCCESSFULLY"
-    echo "Archive: http://192.168.1.35:8080"
+    echo "Archive: http://192.168.1.35:8188"
     echo "Scanner inbox: $PROJECT/scanner_inbox"
     echo "Backup: $BACKUP"
     exit 0
