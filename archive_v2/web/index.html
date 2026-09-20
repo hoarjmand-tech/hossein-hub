@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1224">
 <link rel="manifest" href="/manifest.webmanifest">
-<title>Hossein Archive 4.5</title>
+<title>Hossein Archive 4.6</title>
 <style>
 @font-face{font-family:"Noto Sans Arabic";src:url('/font-persian-regular.ttf') format('truetype');font-weight:400;font-display:swap}
 @font-face{font-family:"Noto Sans Arabic";src:url('/font-persian-bold.ttf') format('truetype');font-weight:700 900;font-display:swap}
@@ -206,9 +206,11 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
  <button class="navbtn" onclick="setSource('scanner_folder',this)" title="اسکنر و پوشه ورودی"><span class="nav-icon">▣</span><span class="nav-label">اسکنر و پوشه</span><span id="nScanner" class="count">0</span></button>
  <button class="navbtn" onclick="setSource('telegram',this)" title="اسناد تلگرام"><span class="nav-icon">➤</span><span class="nav-label">تلگرام</span><span id="nTelegram" class="count">0</span></button>
  <div class="nav-group">مدیریت</div>
+ <button class="navbtn" onclick="openAlerts()" title="هشدار اعتبار و مدارک ناقص"><span class="nav-icon">!</span><span class="nav-label">هشدارها</span><span id="nAlerts" class="count">0</span></button>
+ <button class="navbtn" onclick="openDossierFromFilter()" title="پرونده شخص یا سازمان"><span class="nav-icon">▰</span><span class="nav-label">پرونده‌ها</span></button>
  <button class="navbtn" onclick="openSystem()" title="وضعیت و فعالیت‌ها"><span class="nav-icon">◉</span><span class="nav-label">وضعیت سامانه</span></button>
  <button class="navbtn" onclick="openUpload()" title="افزودن سند"><span class="nav-icon">＋</span><span class="nav-label">افزودن سند</span></button>
- <div class="side-note">نسخه 4.5 · سرور 192.168.1.35<br>OCR · Scanner · Telegram</div>
+ <div class="side-note">نسخه 4.6 · سرور 192.168.1.35<br>OCR · Dossier · Telegram</div>
 </aside>
 
 <main class="main">
@@ -227,6 +229,9 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
   <div class="stat"><b id="sShare">0</b><span>لینک اشتراک فعال</span></div>
   <div class="stat"><b id="sScanner">0</b><span>ورودی اسکنر</span></div>
   <div class="stat"><b id="sTelegram">0</b><span>ورودی تلگرام</span></div>
+  <div class="stat"><b id="sExpiring">0</b><span>رو به انقضا</span></div>
+  <div class="stat"><b id="sExpired">0</b><span>منقضی‌شده</span></div>
+  <div class="stat"><b id="sMissing">0</b><span>مدرک ناقص</span></div>
   <div class="stat"><b id="sSize">0 MB</b><span>حجم آرشیو</span></div>
  </div>
 
@@ -236,6 +241,7 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
    <select id="entityFilter" onchange="loadDocs()"><option value="">همه اشخاص و سازمان‌ها</option></select>
    <select id="typeFilter" onchange="loadDocs()"><option value="">همه نوع‌های مدرک</option></select>
    <select id="countryFilter" onchange="loadDocs()"><option value="">همه کشورها</option></select>
+   <select id="validityFilter" onchange="loadDocs()"><option value="">همه اعتبارها</option><option value="valid">معتبر</option><option value="expiring">رو به انقضا</option><option value="expired">منقضی‌شده</option></select>
    <select id="source" onchange="loadDocs()"><option value="">همه منابع</option><option value="upload">آپلود مستقیم</option><option value="scanner_folder">اسکنر و پوشه ورودی</option><option value="telegram">Telegram</option><option value="google_drive">Google Drive</option></select>
    <select id="ocr" onchange="loadDocs()"><option value="">همه وضعیت‌های OCR</option><option value="done">آماده</option><option value="pending">در صف</option><option value="processing">در حال OCR</option><option value="empty">بدون متن</option><option value="failed">خطا</option></select>
    <select id="days" onchange="loadDocs()"><option value="">همه زمان‌ها</option><option value="1">۲۴ ساعت اخیر</option><option value="7">۷ روز اخیر</option><option value="30">۳۰ روز اخیر</option><option value="90">۹۰ روز اخیر</option><option value="365">یک سال اخیر</option></select>
@@ -292,6 +298,8 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
     <div><label>شخص / سازمان</label><select id="eEntity" class="field"></select><button class="smallbtn" style="margin-top:6px" type="button" onclick="openEntityModal()">＋ افزودن شخص یا سازمان</button></div>
     <div><label>نوع مدرک</label><select id="eDocumentType" class="field"></select></div>
     <div><label>کشور مورد استفاده</label><select id="eCountry" class="field"></select></div>
+    <div><label>تاریخ صدور</label><input id="eIssueDate" class="field" type="date"></div>
+    <div><label>تاریخ انقضا</label><input id="eExpiryDate" class="field" type="date"></div>
     <div class="span2"><label>یادداشت شخصی</label><textarea id="eNotes" class="field" placeholder="هر توضیحی که بعداً در جستجو هم پیدا شود…"></textarea></div>
    </div>
    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px"><button class="btn" onclick="closeModal('editModal')">انصراف</button><button class="btn primary" onclick="saveEdit()">ذخیره</button></div>
@@ -316,6 +324,7 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
    <div class="meta-block"><div class="meta-label">صاحب تشخیص‌داده‌شده سند</div><div id="pOwner">—</div></div>
    <div class="meta-block"><div class="meta-label">پرونده شخص / سازمان</div><div id="pEntity">—</div></div>
    <div class="meta-block"><div class="meta-label">نوع مدرک و کشور</div><div id="pTypeCountry">—</div></div>
+   <div class="meta-block"><div class="meta-label">اعتبار و نسخه</div><div id="pValidity">—</div></div>
    <div class="meta-block"><div class="meta-label">دسته</div><div id="pCategory"></div></div>
    <div class="meta-block"><div class="meta-label">وضعیت OCR</div><div id="pOcr"></div></div>
    <div class="meta-block"><div class="meta-label">برچسب‌ها</div><div id="pTags">—</div></div>
@@ -328,9 +337,28 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
     <button class="btn" onclick="retryCurrent()">OCR و نام‌گذاری مجدد</button>
     <button class="btn" onclick="openCurrentNewTab()">نسخه کامل</button>
     <button class="btn" onclick="toggleCurrentFav()">★ علاقه‌مندی</button>
+    <button class="btn" onclick="openVersions()">نسخه‌ها</button>
+    <button class="btn" onclick="openCurrentDossier()">پرونده صاحب سند</button>
    </div>
   </aside>
  </div>
+</div>
+
+<div id="alertsModal" class="modal hidden">
+ <div class="modal-card"><div class="modal-head"><h3>هشدارهای مدارک</h3><button class="close" onclick="closeModal('alertsModal')">✕</button></div>
+ <div class="modal-body"><h3>انقضا در ۶۰ روز آینده یا گذشته</h3><div id="expiryAlerts"></div><h3 style="margin-top:20px">مدارک لازمِ موجود نیست</h3><div id="missingAlerts"></div></div></div>
+</div>
+
+<div id="dossierModal" class="modal hidden">
+ <div class="modal-card" style="width:min(980px,96vw)"><div class="modal-head"><h3 id="dossierTitle">پرونده</h3><button class="close" onclick="closeModal('dossierModal')">✕</button></div>
+ <div class="modal-body"><div id="dossierSummary" class="system-grid"></div><h3 style="margin-top:18px">مدارک پرونده</h3><div id="dossierDocs"></div>
+ <h3 style="margin-top:18px">چک‌لیست مدارک لازم</h3><div class="form-grid"><select id="reqType" class="field"></select><select id="reqCountry" class="field"></select></div>
+ <button class="btn primary" style="margin-top:8px" onclick="addRequirement()">افزودن به چک‌لیست</button><div id="requirementsList" style="margin-top:10px"></div></div></div>
+</div>
+
+<div id="versionsModal" class="modal hidden">
+ <div class="modal-card"><div class="modal-head"><h3>نسخه‌های سند</h3><button class="close" onclick="closeModal('versionsModal')">✕</button></div>
+ <div class="modal-body"><div id="versionsList"></div><h3 style="margin-top:18px">جایگزینی با نسخه جدید</h3><input id="replaceFile" class="field" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff"><input id="versionNote" class="field" style="margin-top:8px" placeholder="توضیح نسخه، مثلاً تمدید ۲۰۲۷"><button class="btn primary" style="margin-top:8px" onclick="replaceCurrentDocument()">ثبت نسخه جدید</button></div></div>
 </div>
 
 <div id="shareModal" class="modal hidden">
@@ -374,7 +402,7 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
 <div id="toast" class="toast hidden"></div>
 
 <script>
-const state={scope:'all',docs:[],categories:[],entities:[],documentTypes:[],countries:[],current:null,timer:null,stats:null,view:localStorage.getItem('archiveView')||'list',selected:new Set(),tags:[]};
+const state={scope:'all',docs:[],categories:[],entities:[],documentTypes:[],countries:[],current:null,currentDossier:null,timer:null,stats:null,view:localStorage.getItem('archiveView')||'list',selected:new Set(),tags:[]};
 const $=id=>document.getElementById(id);
 const sidebar=$('sidebar'),fileInput=$('fileInput');
 function toggleMenu(){
@@ -402,6 +430,7 @@ function countryName(id){return state.countries.find(x=>x.id===id)?.name||id||'�
 function entityKindName(kind){return ({person:'شخص',organization:'سازمان',other:'سایر'})[kind]||kind}
 function sourceName(id){return ({upload:'آپلود مستقیم',google_drive:'Google Drive',scanner_folder:'اسکنر',telegram:'Telegram'})[id]||id||'نامشخص'}
 function ocrBadge(s){const n={done:'آماده',pending:'در صف',processing:'در حال OCR',failed:'خطا',empty:'بدون متن'};return '<span class="badge '+esc(s)+'">'+esc(n[s]||s)+'</span>'}
+function validityName(s){return ({none:'بدون تاریخ انقضا',valid:'معتبر',expiring:'رو به انقضا',expired:'منقضی‌شده'})[s]||s}
 function closeModal(id){$(id).classList.add('hidden')}
 function closeAll(){document.querySelectorAll('.modal').forEach(x=>x.classList.add('hidden'));$('previewImage').removeAttribute('src')}
 function searchChanged(){saveRecentSearch();clearTimeout(state.timer);state.timer=setTimeout(loadDocs,220)}
@@ -417,12 +446,13 @@ async function boot(){
 async function refreshAll(){await Promise.all([loadStats(),loadDocs()])}
 async function loadStats(){
  const s=await api('/api/stats');state.stats=s;
- $('sDocs').textContent=s.documents;$('sFav').textContent=s.favorites;$('sOther').textContent=s.uncategorized;$('sProc').textContent=s.processing;$('sShare').textContent=s.shares||0;$('sScanner').textContent=s.scanner||0;$('sTelegram').textContent=s.telegram||0;$('sSize').textContent=fmtSize(s.storage);
+ $('sDocs').textContent=s.documents;$('sFav').textContent=s.favorites;$('sOther').textContent=s.uncategorized;$('sProc').textContent=s.processing;$('sShare').textContent=s.shares||0;$('sScanner').textContent=s.scanner||0;$('sTelegram').textContent=s.telegram||0;$('sExpiring').textContent=s.expiring||0;$('sExpired').textContent=s.expired||0;$('sMissing').textContent=s.missing||0;$('sSize').textContent=fmtSize(s.storage);
+ $('nAlerts').textContent=(s.expiring||0)+(s.expired||0)+(s.missing||0);
  $('nAll').textContent=s.documents;$('nFav').textContent=s.favorites;$('nOther').textContent=s.uncategorized;$('nTrash').textContent=s.trash;$('nScanner').textContent=s.scanner||0;$('nTelegram').textContent=s.telegram||0
 }
 async function loadDocs(){
  const u=new URL('/api/documents',location.origin);
- const vals={q:$('search').value.trim(),category:$('category').value,entity_id:$('entityFilter').value,document_type:$('typeFilter').value,country:$('countryFilter').value,source:$('source').value,ocr:$('ocr').value,days:$('days').value,sort:$('sort').value,scope:state.scope};
+ const vals={q:$('search').value.trim(),category:$('category').value,entity_id:$('entityFilter').value,document_type:$('typeFilter').value,country:$('countryFilter').value,validity:$('validityFilter').value,source:$('source').value,ocr:$('ocr').value,days:$('days').value,sort:$('sort').value,scope:state.scope};
  Object.entries(vals).forEach(([k,v])=>{if(v)u.searchParams.set(k,v)});
  const d=await api(u);state.docs=d.items;$('resultInfo').textContent=d.count+' سند'+(vals.q?' برای «'+vals.q+'»':'');syncSelection();render()
 }
@@ -439,7 +469,7 @@ async function openSystem(){
  $('activityList').innerHTML=a.items.length?a.items.map(x=>'<div class="activity-row"><b>'+esc(names[x.action]||x.action)+'</b> · '+esc(x.source)+'<small>'+esc(x.details||'')+' · '+fmtDate(x.created_at)+'</small></div>').join(''):'<div class="empty">هنوز فعالیتی ثبت نشده است.</div>';
  $('systemModal').classList.remove('hidden')
 }
-function clearFilters(){$('search').value='';['category','entityFilter','typeFilter','countryFilter','source','ocr','days'].forEach(id=>$(id).value='');$('sort').value='newest';loadDocs()}
+function clearFilters(){$('search').value='';['category','entityFilter','typeFilter','countryFilter','validityFilter','source','ocr','days'].forEach(id=>$(id).value='');$('sort').value='newest';loadDocs()}
 
 function renderMetadataOptions(){
  const current={filter:$('entityFilter').value,edit:$('eEntity').value};
@@ -448,8 +478,9 @@ function renderMetadataOptions(){
  $('entityFilter').value=current.filter;$('eEntity').value=current.edit;
  $('typeFilter').innerHTML='<option value="">همه نوع‌های مدرک</option>'+state.documentTypes.map(x=>'<option>'+esc(x)+'</option>').join('');
  $('eDocumentType').innerHTML='<option value="">انتخاب نشده</option>'+state.documentTypes.map(x=>'<option>'+esc(x)+'</option>').join('');
+ $('reqType').innerHTML='<option value="">نوع مدرک لازم…</option>'+state.documentTypes.map(x=>'<option>'+esc(x)+'</option>').join('');
  const countryOptions=state.countries.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join('');
- $('countryFilter').innerHTML='<option value="">همه کشورها</option>'+countryOptions;$('eCountry').innerHTML='<option value="">انتخاب نشده</option>'+countryOptions;$('newEntityCountry').innerHTML='<option value="">انتخاب نشده</option>'+countryOptions;
+ $('countryFilter').innerHTML='<option value="">همه کشورها</option>'+countryOptions;$('eCountry').innerHTML='<option value="">انتخاب نشده</option>'+countryOptions;$('newEntityCountry').innerHTML='<option value="">انتخاب نشده</option>'+countryOptions;$('reqCountry').innerHTML='<option value="">هر کشور</option>'+countryOptions;
 }
 function openEntityModal(){$('newEntityName').value='';$('newEntityKind').value='person';$('newEntityCountry').value=$('eCountry').value||'';$('newEntityNotes').value='';$('entityModal').classList.remove('hidden')}
 async function createEntity(){const name=$('newEntityName').value.trim();if(!name){toast('نام شخص یا سازمان را وارد کنید');return}const r=await api('/api/entities',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,kind:$('newEntityKind').value,country:$('newEntityCountry').value,notes:$('newEntityNotes').value.trim()})});const e=await api('/api/entities');state.entities=e.items;renderMetadataOptions();$('eEntity').value=r.item.id;closeModal('entityModal');toast('پرونده جدید ساخته شد')}
@@ -505,7 +536,7 @@ async function exportSelected(){
 async function openDoc(id){
  const d=await api('/api/documents/'+id);state.current=d;
  let entities={};try{entities=JSON.parse(d.extracted_entities||'{}')}catch(e){}
- $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pOwner').textContent=entities.person_name||'تشخیص داده نشد';$('pEntity').textContent=d.entity_name||'بدون پرونده';$('pTypeCountry').textContent=[d.document_type||'نوع نامشخص',countryName(d.country)].join(' · ');$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
+ $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pOwner').textContent=entities.person_name||'تشخیص داده نشد';$('pEntity').textContent=d.entity_name||'بدون پرونده';$('pTypeCountry').textContent=[d.document_type||'نوع نامشخص',countryName(d.country)].join(' · ');$('pValidity').textContent=[validityName(d.validity_status),'صدور: '+(d.issue_date||'—'),'انقضا: '+(d.expiry_date||'—'),'نسخه '+(d.version_no||1)].join(' · ');$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
  const s=$('pSuggest');s.innerHTML=(d.suggested_title&&d.suggested_title!==d.title)?'<div class="suggest"><b>پیشنهاد عنوان</b><div>'+esc(d.suggested_title)+'</div><button class="btn success" style="margin-top:8px" onclick="applySuggestion()">اعمال پیشنهاد</button></div>':'';
  const fs=$('pFilenameSuggest');
  if(d.smart_filename&&d.smart_filename!==d.original_name){fs.innerHTML='<div class="filename-suggest"><b>نام پیشنهادی OCR — قابل ویرایش</b><input id="pSmartFilename" class="field" dir="auto" value="'+esc(d.smart_filename)+'"><small>بر اساس تاریخ، نوع سند، صادرکننده و شماره مرجع</small><button class="btn primary" style="margin-top:8px" onclick="applySmartFilename()">اعمال این نام</button></div>'}
@@ -518,9 +549,9 @@ async function openDoc(id){
 function closePreview(){$('previewImage').removeAttribute('src');closeModal('previewModal')}
 async function applySuggestion(){await api('/api/documents/'+state.current.id+'/apply-suggestion',{method:'POST'});toast('عنوان پیشنهادی اعمال شد');closePreview();refreshAll()}
 async function applySmartFilename(){if(!state.current)return;const id=state.current.id,filename=$('pSmartFilename')?.value.trim()||state.current.smart_filename;await api('/api/documents/'+id+'/apply-smart-filename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename})});toast('نام پیشنهادی OCR اعمال شد');await openDoc(id);refreshAll()}
-function editCurrent(){const d=state.current;if(!d)return;closePreview();$('eTitle').value=d.title||'';$('eFilename').value=d.original_name||'';$('eSmartFilename').value=d.smart_filename||d.original_name||'';$('eCategory').value=d.category||'other';$('eEntity').value=d.entity_id||'';$('eDocumentType').value=d.document_type||'';$('eCountry').value=d.country||'';$('eTags').value=d.tags||'';$('eNotes').value=d.notes||'';$('editModal').classList.remove('hidden')}
+function editCurrent(){const d=state.current;if(!d)return;closePreview();$('eTitle').value=d.title||'';$('eFilename').value=d.original_name||'';$('eSmartFilename').value=d.smart_filename||d.original_name||'';$('eCategory').value=d.category||'other';$('eEntity').value=d.entity_id||'';$('eDocumentType').value=d.document_type||'';$('eCountry').value=d.country||'';$('eIssueDate').value=d.issue_date||'';$('eExpiryDate').value=d.expiry_date||'';$('eTags').value=d.tags||'';$('eNotes').value=d.notes||'';$('editModal').classList.remove('hidden')}
 async function quickEdit(id){state.current=await api('/api/documents/'+id);editCurrent()}
-async function saveEdit(){const d=state.current;if(!d)return;const filename=$('eFilename').value.trim();if(!filename){toast('نام فایل نمی‌تواند خالی باشد');return}await api('/api/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('eTitle').value.trim(),filename,smart_filename:$('eSmartFilename').value.trim(),category:$('eCategory').value,entity_id:$('eEntity').value,document_type:$('eDocumentType').value,country:$('eCountry').value,tags:$('eTags').value.trim(),notes:$('eNotes').value.trim()})});closeModal('editModal');toast('مشخصات سند ذخیره شد');const t=await api('/api/tags');state.tags=t.items;renderChips();refreshAll()}
+async function saveEdit(){const d=state.current;if(!d)return;const filename=$('eFilename').value.trim();if(!filename){toast('نام فایل نمی‌تواند خالی باشد');return}await api('/api/documents/'+d.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('eTitle').value.trim(),filename,smart_filename:$('eSmartFilename').value.trim(),category:$('eCategory').value,entity_id:$('eEntity').value,document_type:$('eDocumentType').value,country:$('eCountry').value,issue_date:$('eIssueDate').value,expiry_date:$('eExpiryDate').value,tags:$('eTags').value.trim(),notes:$('eNotes').value.trim()})});closeModal('editModal');toast('مشخصات سند ذخیره شد');const t=await api('/api/tags');state.tags=t.items;renderChips();refreshAll()}
 async function toggleFav(id,v){await api('/api/documents/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({favorite:!!v})});refreshAll()}
 async function toggleCurrentFav(){if(!state.current)return;await toggleFav(state.current.id,!state.current.favorite);state.current.favorite=!state.current.favorite;toast('علاقه‌مندی تغییر کرد')}
 async function retryCurrent(){if(!state.current)return;await api('/api/documents/'+state.current.id+'/retry-ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto_rename:true})});toast('OCR و نام‌گذاری خودکار وارد صف شد');closePreview();refreshAll()}
@@ -563,6 +594,28 @@ async function createShare(download=false){const d=await api('/api/documents/'+s
 async function revokeShare(token){await api('/api/shares/'+token,{method:'DELETE'});toast('لینک لغو شد');loadShares();loadStats()}
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast('کپی شد')}catch(e){prompt('کپی کنید:',t)}}
 async function shareNative(url){if(navigator.share){try{await navigator.share({title:state.current?.title||'Document',url})}catch(e){}}else copyText(url)}
+
+async function openAlerts(){
+ const a=await api('/api/alerts?days=60');
+ $('expiryAlerts').innerHTML=a.expiry.length?a.expiry.map(x=>'<div class="share-row"><b>'+esc(x.title)+'</b><div class="sub">'+esc(x.entity_name||'بدون پرونده')+' · '+esc(x.document_type||'نوع نامشخص')+' · '+esc(x.expiry_date)+' · '+(x.days_left<0?Math.abs(x.days_left)+' روز گذشته':x.days_left+' روز مانده')+'</div><button class="smallbtn" onclick="openDoc(\''+x.id+'\')">مشاهده</button></div>').join(''):'<div class="empty" style="padding:20px">هشدار انقضا ندارید.</div>';
+ $('missingAlerts').innerHTML=a.missing.length?a.missing.map(x=>'<div class="share-row"><b>'+esc(x.entity_name)+' — '+esc(x.document_type)+'</b><div class="sub">'+esc(countryName(x.country))+'</div><button class="smallbtn" onclick="openDossier(\''+x.entity_id+'\')">بازکردن پرونده</button></div>').join(''):'<div class="empty" style="padding:20px">مدرک ناقصی ثبت نشده است.</div>';
+ $('alertsModal').classList.remove('hidden')
+}
+function openDossierFromFilter(){const id=$('entityFilter').value;if(!id){toast('ابتدا یک شخص یا سازمان را از فیلتر انتخاب کنید');return}openDossier(id)}
+function openCurrentDossier(){const id=state.current?.entity_id;if(!id){toast('این سند هنوز به پرونده‌ای متصل نشده است');return}closePreview();openDossier(id)}
+async function openDossier(id){
+ const d=await api('/api/entities/'+id+'/dossier');state.currentDossier=d;
+ $('dossierTitle').textContent='پرونده '+d.entity.name;
+ $('dossierSummary').innerHTML=[['کل مدارک',d.summary.documents],['مدرک لازم',d.summary.required],['ناقص',d.summary.missing],['منقضی',d.summary.expired],['رو به انقضا',d.summary.expiring]].map(x=>'<div class="system-card"><b>'+esc(x[0])+'</b><span>'+esc(x[1])+'</span></div>').join('');
+ $('dossierDocs').innerHTML=d.documents.length?d.documents.map(x=>'<div class="share-row"><b>'+esc(x.title)+'</b><div class="sub">'+esc(x.document_type||'نوع نامشخص')+' · '+esc(countryName(x.country))+' · '+esc(validityName(x.validity_status))+' · نسخه '+esc(x.version_no)+'</div><button class="smallbtn" onclick="openDoc(\''+x.id+'\')">مشاهده</button></div>').join(''):'<div class="empty" style="padding:20px">هنوز سندی به این پرونده متصل نیست.</div>';
+ $('requirementsList').innerHTML=d.requirements.length?d.requirements.map(x=>'<div class="share-row"><b>'+esc(x.document_type)+'</b> · '+esc(countryName(x.country))+' <span class="badge '+(x.fulfilled?'done':'failed')+'">'+(x.fulfilled?'موجود':'ناقص')+'</span><button class="smallbtn danger" style="float:left" onclick="deleteRequirement(\''+x.id+'\')">حذف</button></div>').join(''):'<div class="empty" style="padding:16px">چک‌لیستی تعریف نشده است.</div>';
+ $('dossierModal').classList.remove('hidden')
+}
+async function addRequirement(){const d=state.currentDossier,type=$('reqType').value;if(!d||!type){toast('نوع مدرک را انتخاب کنید');return}await api('/api/entities/'+d.entity.id+'/requirements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({document_type:type,country:$('reqCountry').value})});await openDossier(d.entity.id);loadStats()}
+async function deleteRequirement(id){const d=state.currentDossier;if(!d)return;await api('/api/entities/'+d.entity.id+'/requirements/'+id,{method:'DELETE'});await openDossier(d.entity.id);loadStats()}
+
+async function openVersions(){if(!state.current)return;const d=await api('/api/documents/'+state.current.id+'/versions');$('versionsList').innerHTML='<div class="share-row"><b>نسخه فعلی '+esc(d.current.version_no)+'</b><div class="sub">'+esc(d.current.original_name)+' · '+fmtSize(d.current.size)+'</div></div>'+d.items.map(x=>'<div class="share-row"><b>نسخه '+esc(x.version_no)+'</b><div class="sub">'+esc(x.original_name)+' · '+fmtSize(x.size)+' · '+fmtDate(x.created_at)+(x.note?' · '+esc(x.note):'')+'</div><a class="smallbtn" target="_blank" href="/api/documents/'+state.current.id+'/versions/'+x.id+'/file">مشاهده نسخه</a></div>').join('');closePreview();$('versionsModal').classList.remove('hidden')}
+async function replaceCurrentDocument(){const f=$('replaceFile').files[0];if(!state.current||!f){toast('فایل نسخه جدید را انتخاب کنید');return}const fd=new FormData();fd.append('file',f);await api('/api/documents/'+state.current.id+'/replace',{method:'POST',headers:{'X-Version-Note':$('versionNote').value.trim()},body:fd});$('replaceFile').value='';$('versionNote').value='';toast('نسخه جدید ثبت شد و OCR در صف قرار گرفت');closeModal('versionsModal');refreshAll()}
 
 function applyTheme(t){document.documentElement.dataset.theme=t;localStorage.setItem('archiveTheme',t);$('themeBtn').textContent=t==='dark'?'☀':'◐'}
 function toggleTheme(){applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}

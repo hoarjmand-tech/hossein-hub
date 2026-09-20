@@ -92,6 +92,17 @@ def db():
 def now():
     return datetime.now(timezone.utc).isoformat()
 
+def document_validity(expiry_date):
+    if not expiry_date:return "none"
+    try:
+        expiry=datetime.strptime(str(expiry_date)[:10],"%Y-%m-%d").date()
+    except ValueError:
+        return "none"
+    days=(expiry-datetime.now(timezone.utc).date()).days
+    if days<0:return "expired"
+    if days<=60:return "expiring"
+    return "valid"
+
 def init_db():
     with db() as con:
         con.executescript("""
@@ -144,6 +155,9 @@ def init_db():
             "country":"TEXT NOT NULL DEFAULT ''",
             "ai_confidence":"REAL NOT NULL DEFAULT 0",
             "extracted_entities":"TEXT NOT NULL DEFAULT '{}'",
+            "issue_date":"TEXT NOT NULL DEFAULT ''",
+            "expiry_date":"TEXT NOT NULL DEFAULT ''",
+            "version_no":"INTEGER NOT NULL DEFAULT 1",
         }
         for column,declaration in document_migrations.items():
             if column not in dcols:
@@ -180,6 +194,31 @@ def init_db():
           value TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS document_versions(
+          id TEXT PRIMARY KEY,
+          document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+          version_no INTEGER NOT NULL,
+          stored_name TEXT NOT NULL,
+          original_name TEXT NOT NULL,
+          mime TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          sha256 TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          note TEXT NOT NULL DEFAULT ''
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_document_versions_number
+          ON document_versions(document_id,version_no);
+        CREATE TABLE IF NOT EXISTS entity_requirements(
+          id TEXT PRIMARY KEY,
+          entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+          document_type TEXT NOT NULL,
+          country TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_requirements_unique
+          ON entity_requirements(entity_id,document_type,country);
+        CREATE INDEX IF NOT EXISTS idx_documents_expiry ON documents(expiry_date);
         """)
         try:
             con.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts2
@@ -529,13 +568,13 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="4.5",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="4.6",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"4.5","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"4.6","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
@@ -548,6 +587,8 @@ def telegram_mini_app():
 
 @app.get("/api/stats")
 def stats():
+    today=datetime.now(timezone.utc).date().isoformat()
+    warning=(datetime.now(timezone.utc).date()+timedelta(days=60)).isoformat()
     with db() as con:
         return {
             "documents":con.execute("SELECT count(*) FROM documents WHERE deleted=0").fetchone()[0],
@@ -560,10 +601,16 @@ def stats():
             "scanner":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND source='scanner_folder'").fetchone()[0],
             "telegram":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND source='telegram'").fetchone()[0],
             "failed":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND ocr_status='failed'").fetchone()[0],
+            "expired":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND expiry_date<>'' AND expiry_date<?",(today,)).fetchone()[0],
+            "expiring":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND expiry_date>=? AND expiry_date<=?",(today,warning)).fetchone()[0],
+            "missing":con.execute("""SELECT count(*) FROM entity_requirements r WHERE NOT EXISTS(
+                SELECT 1 FROM documents d WHERE d.deleted=0 AND d.entity_id=r.entity_id
+                AND d.document_type=r.document_type AND (r.country='' OR d.country=r.country)
+            )""").fetchone()[0],
         }
 
 @app.get("/api/documents")
-def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest",entity_id:str="",document_type:str="",country:str=""):
+def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest",entity_id:str="",document_type:str="",country:str="",validity:str=""):
     where=["1=1"];args=[]
     where.append("deleted=?");args.append(1 if scope=="trash" else 0)
     if scope=="favorites":where.append("favorite=1")
@@ -576,6 +623,14 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope
         where.append("document_type=?");args.append(document_type)
     if country:
         where.append("country=?");args.append(country)
+    today=datetime.now(timezone.utc).date().isoformat()
+    warning=(datetime.now(timezone.utc).date()+timedelta(days=60)).isoformat()
+    if validity=="expired":
+        where.append("expiry_date<>'' AND expiry_date<?");args.append(today)
+    elif validity=="expiring":
+        where.append("expiry_date>=? AND expiry_date<=?");args.extend([today,warning])
+    elif validity=="valid":
+        where.append("(expiry_date='' OR expiry_date>?)");args.append(warning)
     if source in ("upload","google_drive","scanner_folder","telegram"):
         where.append("source=?");args.append(source)
     if ocr in ("pending","processing","done","empty","failed"):
@@ -601,7 +656,7 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope
             where.append("(title LIKE ? OR original_name LIKE ? OR ocr_text LIKE ? OR tags LIKE ? OR notes LIKE ? OR entity_id IN (SELECT id FROM entities WHERE name LIKE ?))")
             args.extend([x,x,x,x,x,x])
     order={"newest":"created_at DESC","oldest":"created_at ASC","name":"title COLLATE NOCASE ASC","size":"size DESC"}.get(sort,"created_at DESC")
-    sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text,smart_filename,document_type,country,entity_id,
+    sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text,smart_filename,document_type,country,entity_id,issue_date,expiry_date,version_no,
             coalesce((SELECT name FROM entities e WHERE e.id=documents.entity_id),'') AS entity_name
             FROM documents WHERE {' AND '.join(where)} ORDER BY {order} LIMIT 500"""
     with db() as con:
@@ -610,6 +665,7 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope
             d=dict(r)
             d["snippet"]=make_snippet(d.pop("ocr_text",""),q) if q.strip() else ""
             d["has_preview"]=(PREV/f'{d["id"]}.jpg').exists()
+            d["validity_status"]=document_validity(d.get("expiry_date"))
             rows.append(d)
     return {"items":rows,"count":len(rows)}
 
@@ -621,6 +677,7 @@ def document(did:str):
             FROM documents d WHERE d.id=?""",(did,)).fetchone()
         if not row:raise HTTPException(404)
         d=dict(row);d["ocr_text"]=(d["ocr_text"] or "")[:30000]
+        d["validity_status"]=document_validity(d.get("expiry_date"))
         return d
 
 @app.post("/api/documents/upload")
@@ -640,7 +697,7 @@ def drive_upload(file:UploadFile=File(...),x_drive_token:str|None=Header(None,al
 
 @app.patch("/api/documents/{did}")
 def update_document(did:str,payload:dict=Body(...)):
-    allowed={"title","category","tags","notes","favorite","filename","smart_filename","entity_id","document_type","country"}
+    allowed={"title","category","tags","notes","favorite","filename","smart_filename","entity_id","document_type","country","issue_date","expiry_date"}
     updates=[];args=[]
     with db() as con:
         current=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
@@ -655,6 +712,9 @@ def update_document(did:str,payload:dict=Body(...)):
                     if not con.execute("SELECT 1 FROM entities WHERE id=?",(v,)).fetchone():raise HTTPException(400,"Unknown entity")
         if k in ("document_type","country"):
             v=str(v or "").strip()[:100]
+        if k in ("issue_date","expiry_date"):
+            v=str(v or "").strip()
+            if v and not re.fullmatch(r"\d{4}-\d{2}-\d{2}",v):raise HTTPException(400,"Date must use YYYY-MM-DD")
         if k=="smart_filename":
             requested=clean_filename(str(v or "").strip())
             original_ext=Path(current["original_name"]).suffix
@@ -730,11 +790,13 @@ def permanent_delete(did:str):
     with db() as con:
         row=con.execute("SELECT stored_name FROM documents WHERE id=?",(did,)).fetchone()
         if not row:raise HTTPException(404)
+        version_files=[r[0] for r in con.execute("SELECT stored_name FROM document_versions WHERE document_id=?",(did,))]
         con.execute("DELETE FROM shares WHERE document_id=?",(did,))
         try:con.execute("DELETE FROM documents_fts2 WHERE id=?",(did,))
         except Exception:pass
         con.execute("DELETE FROM documents WHERE id=?",(did,))
     (FILES/row["stored_name"]).unlink(missing_ok=True)
+    for stored_name in version_files:(FILES/stored_name).unlink(missing_ok=True)
     (PREV/f"{did}.jpg").unlink(missing_ok=True)
     return {"ok":True}
 
@@ -785,7 +847,7 @@ def system_status():
         last=con.execute("SELECT created_at,action,source,details FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
     usage=shutil.disk_usage(ROOT)
     return {
-        "version":"4.5",
+        "version":"4.6",
         "ocr":{"pending":pending,"failed":failed},
         "inbox":{"path":str(inbox),"queued":len(list(inbox.glob('*'))) if inbox.exists() else 0},
         "storage":{"total":usage.total,"used":usage.used,"free":usage.free},
@@ -979,7 +1041,7 @@ def telegram_identity(request:Request):
 
 @app.get("/api/telegram/me")
 def telegram_me(request:Request):
-    return {"ok":True,"user":telegram_identity(request),"version":"4.5"}
+    return {"ok":True,"user":telegram_identity(request),"version":"4.6"}
 
 @app.get("/api/telegram/stats")
 def telegram_stats(request:Request):
@@ -1014,8 +1076,24 @@ def telegram_activity(request:Request,limit:int=30):
     telegram_identity(request);return activity(limit)
 
 @app.get("/api/telegram/documents")
-def telegram_documents(request:Request,q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest",entity_id:str="",document_type:str="",country:str=""):
-    telegram_identity(request);return documents(q,category,source,ocr,days,scope,sort,entity_id,document_type,country)
+def telegram_documents(request:Request,q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope:str="all",sort:str="newest",entity_id:str="",document_type:str="",country:str="",validity:str=""):
+    telegram_identity(request);return documents(q,category,source,ocr,days,scope,sort,entity_id,document_type,country,validity)
+
+@app.get("/api/telegram/alerts")
+def telegram_alerts(request:Request,days:int=60):
+    telegram_identity(request);return alerts(days)
+
+@app.get("/api/telegram/entities/{eid}/dossier")
+def telegram_entity_dossier(request:Request,eid:str):
+    telegram_identity(request);return entity_dossier(eid)
+
+@app.post("/api/telegram/entities/{eid}/requirements")
+def telegram_create_requirement(request:Request,eid:str,payload:dict=Body(...)):
+    telegram_identity(request);return create_requirement(eid,payload)
+
+@app.delete("/api/telegram/entities/{eid}/requirements/{rid}")
+def telegram_delete_requirement(request:Request,eid:str,rid:str):
+    telegram_identity(request);return delete_requirement(eid,rid)
 
 @app.post("/api/telegram/documents/upload")
 def telegram_upload(request:Request,files:list[UploadFile]=File(...)):
@@ -1059,6 +1137,18 @@ def telegram_preview(request:Request,did:str):
 @app.get("/api/telegram/documents/{did}/file")
 def telegram_file(request:Request,did:str,download:int=0):
     telegram_identity(request);return file_view(did,download)
+
+@app.get("/api/telegram/documents/{did}/versions")
+def telegram_versions(request:Request,did:str):
+    telegram_identity(request);return document_versions(did)
+
+@app.post("/api/telegram/documents/{did}/replace")
+def telegram_replace(request:Request,did:str,file:UploadFile=File(...),x_version_note:str|None=Header(None,alias="X-Version-Note")):
+    telegram_identity(request);return replace_document(did,file,x_version_note)
+
+@app.get("/api/telegram/documents/{did}/versions/{vid}/file")
+def telegram_version_file(request:Request,did:str,vid:str,download:int=0):
+    telegram_identity(request);return version_file(did,vid,download)
 
 @app.get("/icon.svg")
 def icon():
@@ -1157,3 +1247,115 @@ def update_entity(eid:str,payload:dict=Body(...)):
         raise HTTPException(409,"This entity already exists")
     audit("entity_updated",source="web",details=eid)
     return {"ok":True,"item":dict(row)}
+
+@app.get("/api/entities/{eid}/dossier")
+def entity_dossier(eid:str):
+    with db() as con:
+        entity=con.execute("SELECT * FROM entities WHERE id=?",(eid,)).fetchone()
+        if not entity:raise HTTPException(404)
+        documents=[dict(r) for r in con.execute("""SELECT id,title,original_name,document_type,country,
+            issue_date,expiry_date,version_no,ocr_status,created_at,updated_at
+            FROM documents WHERE entity_id=? AND deleted=0 ORDER BY document_type,created_at DESC""",(eid,))]
+        requirements=[dict(r) for r in con.execute(
+            "SELECT * FROM entity_requirements WHERE entity_id=? ORDER BY document_type,country",(eid,)
+        )]
+    for item in documents:item["validity_status"]=document_validity(item.get("expiry_date"))
+    present={(d["document_type"],d["country"]) for d in documents}
+    present_any={d["document_type"] for d in documents}
+    for item in requirements:
+        item["fulfilled"]=(item["document_type"],item["country"]) in present if item["country"] else item["document_type"] in present_any
+    return {"entity":dict(entity),"documents":documents,"requirements":requirements,
+            "summary":{"documents":len(documents),"required":len(requirements),
+                       "missing":sum(1 for x in requirements if not x["fulfilled"]),
+                       "expired":sum(1 for x in documents if x["validity_status"]=="expired"),
+                       "expiring":sum(1 for x in documents if x["validity_status"]=="expiring")}}
+
+@app.post("/api/entities/{eid}/requirements")
+def create_requirement(eid:str,payload:dict=Body(...)):
+    document_type=str(payload.get("document_type") or "").strip()[:100]
+    country=str(payload.get("country") or "").strip()[:20]
+    notes=str(payload.get("notes") or "").strip()[:500]
+    if not document_type:raise HTTPException(400,"Document type is required")
+    rid=str(uuid.uuid4())
+    try:
+        with db() as con:
+            if not con.execute("SELECT 1 FROM entities WHERE id=?",(eid,)).fetchone():raise HTTPException(404)
+            con.execute("INSERT INTO entity_requirements(id,entity_id,document_type,country,notes,created_at) VALUES(?,?,?,?,?,?)",
+                        (rid,eid,document_type,country,notes,now()))
+    except sqlite3.IntegrityError:
+        raise HTTPException(409,"Requirement already exists")
+    audit("requirement_created",source="web",details=f"{eid}:{document_type}:{country}")
+    return {"ok":True,"id":rid}
+
+@app.delete("/api/entities/{eid}/requirements/{rid}")
+def delete_requirement(eid:str,rid:str):
+    with db() as con:
+        cur=con.execute("DELETE FROM entity_requirements WHERE id=? AND entity_id=?",(rid,eid))
+        if not cur.rowcount:raise HTTPException(404)
+    audit("requirement_deleted",source="web",details=f"{eid}:{rid}")
+    return {"ok":True}
+
+@app.get("/api/alerts")
+def alerts(days:int=60):
+    days=max(1,min(days,365));today=datetime.now(timezone.utc).date();until=today+timedelta(days=days)
+    with db() as con:
+        expiry=[dict(r) for r in con.execute("""SELECT d.id,d.title,d.original_name,d.document_type,d.country,
+            d.expiry_date,d.entity_id,coalesce(e.name,'') entity_name
+            FROM documents d LEFT JOIN entities e ON e.id=d.entity_id
+            WHERE d.deleted=0 AND d.expiry_date<>'' AND d.expiry_date<=?
+            ORDER BY d.expiry_date""",(until.isoformat(),))]
+        missing=[dict(r) for r in con.execute("""SELECT r.id,r.entity_id,e.name entity_name,r.document_type,r.country,r.notes
+            FROM entity_requirements r JOIN entities e ON e.id=r.entity_id
+            WHERE NOT EXISTS(SELECT 1 FROM documents d WHERE d.deleted=0 AND d.entity_id=r.entity_id
+              AND d.document_type=r.document_type AND (r.country='' OR d.country=r.country))
+            ORDER BY e.name,r.document_type""")]
+    for item in expiry:
+        item["validity_status"]=document_validity(item["expiry_date"])
+        item["days_left"]=(datetime.strptime(item["expiry_date"][:10],"%Y-%m-%d").date()-today).days
+    return {"expiry":expiry,"missing":missing,"days":days}
+
+@app.get("/api/documents/{did}/versions")
+def document_versions(did:str):
+    with db() as con:
+        current=con.execute("SELECT id,version_no,original_name,mime,size,sha256,updated_at FROM documents WHERE id=?",(did,)).fetchone()
+        if not current:raise HTTPException(404)
+        older=[dict(r) for r in con.execute("""SELECT id,version_no,original_name,mime,size,sha256,created_at,note
+            FROM document_versions WHERE document_id=? ORDER BY version_no DESC""",(did,))]
+    return {"current":dict(current),"items":older}
+
+@app.post("/api/documents/{did}/replace")
+def replace_document(did:str,file:UploadFile=File(...),x_version_note:str|None=Header(None,alias="X-Version-Note")):
+    with db() as con:
+        current=con.execute("SELECT * FROM documents WHERE id=? AND deleted=0",(did,)).fetchone()
+    if not current:raise HTTPException(404)
+    saved=hash_and_store(file.file,clean_filename(file.filename or current["original_name"]))
+    if saved.get("duplicate"):raise HTTPException(409,"This file already exists in the archive")
+    vid=str(uuid.uuid4());new_version=int(current["version_no"] or 1)+1;ts=now()
+    try:
+        with db() as con:
+            con.execute("""INSERT INTO document_versions
+                (id,document_id,version_no,stored_name,original_name,mime,size,sha256,created_at,note)
+                VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (vid,did,current["version_no"],current["stored_name"],current["original_name"],current["mime"],
+                 current["size"],current["sha256"],ts,str(x_version_note or "")[:500]))
+            new_name=clean_filename(file.filename or current["original_name"])
+            con.execute("""UPDATE documents SET stored_name=?,original_name=?,source_name=?,mime=?,size=?,sha256=?,
+                version_no=?,ocr_status='pending',ocr_text='',updated_at=? WHERE id=?""",
+                (saved["stored"],new_name,new_name,saved["mime"],saved["size"],saved["sha256"],new_version,ts,did))
+            fresh=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone();fts_upsert(con,fresh)
+    except Exception:
+        (FILES/saved["stored"]).unlink(missing_ok=True)
+        raise
+    (PREV/f"{did}.jpg").unlink(missing_ok=True)
+    audit("document_replaced",did,"web",f"version {new_version}")
+    return {"ok":True,"version_no":new_version,"queued":True}
+
+@app.get("/api/documents/{did}/versions/{vid}/file")
+def version_file(did:str,vid:str,download:int=0):
+    with db() as con:
+        row=con.execute("SELECT * FROM document_versions WHERE id=? AND document_id=?",(vid,did)).fetchone()
+    if not row:raise HTTPException(404)
+    path=FILES/row["stored_name"]
+    if not path.exists():raise HTTPException(404)
+    return FileResponse(path,media_type=row["mime"],filename=row["original_name"],
+                        content_disposition_type="attachment" if download else "inline")
