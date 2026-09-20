@@ -487,13 +487,13 @@ async def lifespan(app):
     yield
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="4.2",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="4.3",lifespan=lifespan)
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"4.2","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"4.3","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
@@ -712,7 +712,7 @@ def system_status():
         last=con.execute("SELECT created_at,action,source,details FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
     usage=shutil.disk_usage(ROOT)
     return {
-        "version":"4.2",
+        "version":"4.3",
         "ocr":{"pending":pending,"failed":failed},
         "inbox":{"path":str(inbox),"queued":len(list(inbox.glob('*'))) if inbox.exists() else 0},
         "storage":{"total":usage.total,"used":usage.used,"free":usage.free},

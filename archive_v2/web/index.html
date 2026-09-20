@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1224">
 <link rel="manifest" href="/manifest.webmanifest">
-<title>Hossein Archive 4.2</title>
+<title>Hossein Archive 4.3</title>
 <style>
 :root{
  --bg:#f3f6fb;--card:#fff;--card2:#fafcff;--text:#172033;--muted:#748096;--line:#e4eaf2;
@@ -206,7 +206,7 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
  <div class="nav-group">مدیریت</div>
  <button class="navbtn" onclick="openSystem()" title="وضعیت و فعالیت‌ها"><span class="nav-icon">◉</span><span class="nav-label">وضعیت سامانه</span></button>
  <button class="navbtn" onclick="openUpload()" title="افزودن سند"><span class="nav-icon">＋</span><span class="nav-label">افزودن سند</span></button>
- <div class="side-note">نسخه 4.2 · سرور 192.168.1.35<br>OCR · Scanner · Telegram</div>
+ <div class="side-note">نسخه 4.3 · سرور 192.168.1.35<br>OCR · Scanner · Telegram</div>
 </aside>
 
 <main class="main">
@@ -304,6 +304,7 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
    <h3 id="pTitle"></h3><small id="pOriginal"></small>
    <div id="pSuggest"></div>
    <div id="pFilenameSuggest"></div>
+   <div class="meta-block"><div class="meta-label">صاحب تشخیص‌داده‌شده سند</div><div id="pOwner">—</div></div>
    <div class="meta-block"><div class="meta-label">دسته</div><div id="pCategory"></div></div>
    <div class="meta-block"><div class="meta-label">وضعیت OCR</div><div id="pOcr"></div></div>
    <div class="meta-block"><div class="meta-label">برچسب‌ها</div><div id="pTags">—</div></div>
@@ -463,7 +464,8 @@ async function exportSelected(){
 
 async function openDoc(id){
  const d=await api('/api/documents/'+id);state.current=d;
- $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
+ let entities={};try{entities=JSON.parse(d.extracted_entities||'{}')}catch(e){}
+ $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pOwner').textContent=entities.person_name||'تشخیص داده نشد';$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
  const s=$('pSuggest');s.innerHTML=(d.suggested_title&&d.suggested_title!==d.title)?'<div class="suggest"><b>پیشنهاد عنوان</b><div>'+esc(d.suggested_title)+'</div><button class="btn success" style="margin-top:8px" onclick="applySuggestion()">اعمال پیشنهاد</button></div>':'';
  const fs=$('pFilenameSuggest');
  if(d.smart_filename&&d.smart_filename!==d.original_name){fs.innerHTML='<div class="filename-suggest"><b>نام پیشنهادی OCR</b><div dir="auto">'+esc(d.smart_filename)+'</div><small>بر اساس تاریخ، نوع سند، صادرکننده و شماره مرجع</small><button class="btn primary" style="margin-top:8px" onclick="applySmartFilename()">اعمال این نام</button></div>'}

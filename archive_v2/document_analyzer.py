@@ -5,6 +5,8 @@ from pathlib import Path
 
 
 RULES = [
+    ("شناسنامه", "identity", ["شناسنامه", "سازمان ثبت احوال کشور", "ثبت احوال"]),
+    ("کارت ملی", "identity", ["کارت ملی", "کارت شناسایی ملی", "national identity card", "شماره ملی"]),
     ("گذرنامه", "identity", ["passport", "reisepass", "گذرنامه", "پاسپورت"]),
     ("کارت اقامت", "identity", ["aufenthaltstitel", "niederlassungsbewilligung", "residence permit", "کارت اقامت"]),
     ("گواهینامه", "identity", ["führerschein", "driving licence", "driving license", "گواهینامه"]),
@@ -74,6 +76,78 @@ def extract_reference(text):
     return ""
 
 
+def clean_person_part(value, script="any"):
+    value = str(value or "").replace("<", " ")
+    value = re.split(
+        r"\s{2,}|\b(?:date|datum|birth|nationality|sex|gender|geburtsdatum|نام پدر|تاریخ تولد|شماره ملی)\b",
+        value,
+        maxsplit=1,
+        flags=re.I,
+    )[0]
+    if script == "fa":
+        value = re.sub(r"[^\u0600-\u06ff\s‌-]", " ", value)
+    elif script == "latin":
+        value = re.sub(r"[^A-Za-zÀ-ž\s'-]", " ", value)
+    value = re.sub(r"\s+", " ", value).strip(" -_'‌")
+    words = [word for word in value.split() if len(word) >= 2][:4]
+    return " ".join(words)
+
+
+def labeled_value(text, labels, script="any"):
+    joined = "|".join(labels)
+    match = re.search(
+        rf"(?:^|[\n\r|])\s*(?:{joined})\s*[:：\-]?\s*([^\n\r|]{{2,70}})",
+        text or "",
+        re.I | re.M,
+    )
+    return clean_person_part(match.group(1), script) if match else ""
+
+
+def extract_person_name(text):
+    raw = (text or "").translate(DIGITS)
+
+    full_fa = labeled_value(
+        raw,
+        [r"نام\s*و\s*نام\s*خانوادگی", r"نام\s*کامل", r"نام\s*دارنده"],
+        "fa",
+    )
+    if full_fa:
+        return full_fa
+
+    family_fa = labeled_value(raw, [r"نام\s*خانوادگی", r"نام\s*فامیل"], "fa")
+    given_fa = labeled_value(raw, [r"نام(?!\s*(?:خانوادگی|پدر|مادر))"], "fa")
+    if given_fa and family_fa:
+        return f"{given_fa} {family_fa}"
+    if given_fa:
+        return given_fa
+
+    surname = labeled_value(
+        raw,
+        [r"surname", r"family\s*name", r"last\s*name", r"nachname", r"familienname"],
+        "latin",
+    )
+    given = labeled_value(
+        raw,
+        [r"given\s*names?", r"first\s*name", r"forename", r"vorname"],
+        "latin",
+    )
+    if given and surname:
+        return f"{given} {surname}".title()
+    if given:
+        return given.title()
+
+    mrz = re.search(
+        r"P<[A-Z]{3}([A-Z]+(?:<[A-Z]+)*)<<([A-Z]+(?:<[A-Z]+)*)",
+        raw.upper(),
+    )
+    if mrz:
+        family = clean_person_part(mrz.group(1), "latin")
+        given = clean_person_part(mrz.group(2), "latin")
+        if given or family:
+            return " ".join(filter(None, [given, family])).title()
+    return ""
+
+
 def analyze_document(text, original_name=""):
     normalized = clean(text)
     best = None
@@ -95,11 +169,14 @@ def analyze_document(text, original_name=""):
 
     date, date_found = extract_date(text)
     reference = extract_reference(text)
+    person_name = extract_person_name(text)
     extension = Path(original_name or "").suffix.lower()
     if extension not in {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}:
         extension = ".pdf"
 
     filename_parts = [date, doc_type]
+    if person_name:
+        filename_parts.append(person_name)
     if issuer and issuer.lower() not in doc_type.lower():
         filename_parts.append(issuer)
     if reference:
@@ -107,6 +184,8 @@ def analyze_document(text, original_name=""):
     smart_filename = "_".join(filter(None, (safe_part(x) for x in filename_parts)))[:220] + extension
 
     title_parts = [doc_type]
+    if person_name:
+        title_parts.append(person_name)
     if issuer and issuer.lower() not in doc_type.lower():
         title_parts.append(issuer)
     if reference:
@@ -118,6 +197,7 @@ def analyze_document(text, original_name=""):
     confidence += 0.10 if issuer else 0
     confidence += 0.08 if date_found else 0
     confidence += 0.08 if reference else 0
+    confidence += 0.10 if person_name else 0
     confidence += 0.05 if len(normalized) >= 120 else 0
     confidence = min(0.97, confidence)
 
@@ -125,6 +205,7 @@ def analyze_document(text, original_name=""):
         "issuer": issuer,
         "date": date if date_found else "",
         "reference": reference,
+        "person_name": person_name,
         "keywords": found,
         "source_filename": original_name,
     }
@@ -133,7 +214,7 @@ def analyze_document(text, original_name=""):
         "suggested_title": suggested_title,
         "document_type": doc_type,
         "category": category,
-        "description_fa": f"نوع سند: {doc_type}؛ صادرکننده احتمالی: {issuer or 'نامشخص'}؛ تاریخ تشخیص‌داده‌شده: {date if date_found else 'نامشخص'}.",
+        "description_fa": f"نوع سند: {doc_type}؛ صاحب احتمالی سند: {person_name or 'نامشخص'}؛ صادرکننده احتمالی: {issuer or 'نامشخص'}؛ تاریخ تشخیص‌داده‌شده: {date if date_found else 'نامشخص'}.",
         "description_de": f"Dokumenttyp: {doc_type}; möglicher Aussteller: {issuer or 'unbekannt'}.",
         "ai_confidence": confidence,
         "extracted_entities": json.dumps(entities, ensure_ascii=False),
