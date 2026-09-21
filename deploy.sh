@@ -48,20 +48,25 @@ print(secrets.token_urlsafe(48))
 PY
 fi
 
+COMPOSE=(docker compose)
+if grep -q '^CLOUDFLARE_TUNNEL_TOKEN=.' .env; then
+  COMPOSE+=(--profile cloudflare)
+fi
+
 python3 -m py_compile archive_v2/*.py intake-worker/*.py telegram-bot/*.py
-docker compose config --quiet
+"${COMPOSE[@]}" config --quiet
 
 echo "===== BUILD ====="
-docker compose build
+"${COMPOSE[@]}" build
 echo "===== START ====="
-docker compose up -d --remove-orphans
+"${COMPOSE[@]}" up -d --remove-orphans
 
 echo "===== HEALTH ====="
 for attempt in $(seq 1 40); do
   if curl -fsS http://127.0.0.1:8188/health >/tmp/hossein-archive-health.json 2>/dev/null; then
     cat /tmp/hossein-archive-health.json
     echo
-    docker compose ps
+    "${COMPOSE[@]}" ps
     echo "DEPLOY COMPLETED SUCCESSFULLY"
     echo "Archive: http://192.168.1.35:8188"
     echo "Scanner inbox: $PROJECT/scanner_inbox"
@@ -73,7 +78,7 @@ for attempt in $(seq 1 40); do
 done
 
 echo "ERROR: Archive health check failed"
-docker compose ps
-docker compose logs --tail 200 archive
+"${COMPOSE[@]}" ps
+"${COMPOSE[@]}" logs --tail 200 archive
 echo "Backup: $BACKUP"
 exit 1

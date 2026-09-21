@@ -1,4 +1,5 @@
 import json
+import html
 import os
 import tempfile
 import time
@@ -75,10 +76,15 @@ def search(chat_id,query):
     if not items:
         send(chat_id,"سندی پیدا نشد.")
         return
-    lines=[f"🔎 <b>نتیجه جست‌وجو برای:</b> {query}"]
+    lines=[f"🔎 <b>نتیجه جست‌وجو برای:</b> {html.escape(query)}"]
     for index,item in enumerate(items,1):
-        lines.append(f"\n{index}. <a href=\"{PUBLIC_URL}/api/documents/{item['id']}/file\">{item['title']}</a>")
-    send(chat_id,"".join(lines))
+        owner=html.escape(str(item.get("entity_name") or "بدون پرونده"))
+        title=html.escape(str(item.get("title") or "سند"))
+        lines.append(f"\n{index}. {title} — {owner}")
+    markup=None
+    if MINI_APP_URL.startswith("https://"):
+        markup={"inline_keyboard":[[{"text":"مشاهده نتایج در Mini App","web_app":{"url":MINI_APP_URL}}]]}
+    send(chat_id,"".join(lines),markup)
 
 
 def download_telegram_file(file_id,name):

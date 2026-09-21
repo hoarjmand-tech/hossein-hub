@@ -10,6 +10,17 @@
 - دسترسی به نسخه‌های قدیمی و ثبت توضیح برای هر نسخه
 - پشتیبانی همین امکانات در پنل وب و Telegram Mini App
 
+## انتشار امن Telegram Mini App با Cloudflare Tunnel
+
+1. در Cloudflare Zero Trust یک Tunnel بسازید.
+2. Public Hostname را روی `archive.arjmand.xyz` و Service را روی
+   `http://telegram-gateway:8081` قرار دهید.
+3. روی سرور `sudo bash setup-telegram.sh` را اجرا کنید و Bot Token، Telegram
+   User ID، آدرس `https://archive.arjmand.xyz/telegram` و Tunnel Token را وارد کنید.
+
+Gateway عمومی فقط Mini App، API امضاشده تلگرام و لینک‌های اشتراک را عبور
+می‌دهد؛ پنل مدیریتی اصلی روی پورت 8188 باقی می‌ماند.
+
 نسخه ۴.۵ شامل پرونده اشخاص و سازمان‌ها، نوع مدرک و کشور، فیلترهای ترکیبی، نام پیشنهادی OCR قابل ویرایش، لینک مستقیم دانلود و فونت فارسی محلی است. این امکانات در پنل وب و Mini App تلگرام در دسترس‌اند.
 
 سامانه ماژولار آرشیو هوشمند اسناد با قابلیت‌های زیر:

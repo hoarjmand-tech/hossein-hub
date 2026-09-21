@@ -75,6 +75,16 @@ services:
       timeout: 5s
       retries: 5
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: hossein-hub-cloudflared
+    restart: unless-stopped
+    profiles: ["cloudflare"]
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      telegram-gateway:
+        condition: service_healthy
+
   tailscale:
     image: tailscale/tailscale:stable
     container_name: hossein-hub-tailscale
