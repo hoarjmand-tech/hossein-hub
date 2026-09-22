@@ -600,9 +600,11 @@ def worker():
 @asynccontextmanager
 async def lifespan(app):
     init_db()
+    personal_start()
     th=threading.Thread(target=worker,daemon=True,name="archive-ocr")
     th.start()
     yield
+    personal_stop()
     STOP.set()
 
 app=FastAPI(title="Hossein Archive",version="4.6",lifespan=lifespan)
@@ -792,7 +794,11 @@ def update_personal_item(item_id:str,payload:dict=Body(...)):
 def delete_personal_item(item_id:str):
     with db() as con:
         if not con.execute("SELECT 1 FROM personal_items WHERE id=?",(item_id,)).fetchone():raise HTTPException(404)
+        voices=list(con.execute("SELECT id FROM personal_voice WHERE item_id=?",(item_id,)))
+        con.execute("DELETE FROM personal_voice WHERE item_id=?",(item_id,))
         con.execute("DELETE FROM personal_items WHERE id=?",(item_id,))
+    for voice in voices:
+        (ROOT/'personal-private'/'voice'/voice['id']).unlink(missing_ok=True)
     return {"ok":True}
 
 @app.get("/api/personal/cases")
@@ -1638,3 +1644,7 @@ def version_file(did:str,vid:str,download:int=0):
     if not path.exists():raise HTTPException(404)
     return FileResponse(path,media_type=row["mime"],filename=row["original_name"],
                         content_disposition_type="attachment" if download else "inline")
+
+# Loaded after route definitions so integrations reuse the existing item API.
+from personal_integrations import install as install_personal_integrations
+personal_start, personal_stop = install_personal_integrations(app,ROOT,WEB,db,create_personal_item)
