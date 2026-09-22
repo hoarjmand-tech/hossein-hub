@@ -206,6 +206,7 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
  <button class="navbtn" onclick="setSource('scanner_folder',this)" title="اسکنر و پوشه ورودی"><span class="nav-icon">▣</span><span class="nav-label">اسکنر و پوشه</span><span id="nScanner" class="count">0</span></button>
  <button class="navbtn" onclick="setSource('telegram',this)" title="اسناد تلگرام"><span class="nav-icon">➤</span><span class="nav-label">تلگرام</span><span id="nTelegram" class="count">0</span></button>
  <div class="nav-group">مدیریت</div>
+ <button class="navbtn" onclick="location.href='/personal'" title="دستیار شخصی و برنامه روزانه"><span class="nav-icon">✦</span><span class="nav-label">دستیار شخصی</span></button>
  <button class="navbtn" onclick="openAlerts()" title="هشدار اعتبار و مدارک ناقص"><span class="nav-icon">!</span><span class="nav-label">هشدارها</span><span id="nAlerts" class="count">0</span></button>
  <button class="navbtn" onclick="openDossierFromFilter()" title="پرونده شخص یا سازمان"><span class="nav-icon">▰</span><span class="nav-label">پرونده‌ها</span></button>
  <button class="navbtn" onclick="openSystem()" title="وضعیت و فعالیت‌ها"><span class="nav-icon">◉</span><span class="nav-label">وضعیت سامانه</span></button>
@@ -218,6 +219,7 @@ html[data-theme="dark"] .filename-suggest{background:#172b50;color:#bcd2ff;borde
   <button class="btn mobile" onclick="sidebar.classList.toggle('open')">☰</button>
   <div class="search"><span class="glass">⌕</span><input id="search" autocomplete="off" placeholder="نام، متن سند، شماره، یادداشت، برچسب…" oninput="searchChanged()"><span class="shortcut">Ctrl K</span></div>
   <button id="themeBtn" class="btn icon" onclick="toggleTheme()" title="تغییر ظاهر">◐</button>
+  <button class="btn" onclick="location.href='/personal'">✦ دستیار شخصی</button>
   <button class="btn primary" onclick="openUpload()">＋ افزودن سند</button>
  </div>
 

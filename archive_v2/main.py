@@ -219,6 +219,43 @@ def init_db():
         CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_requirements_unique
           ON entity_requirements(entity_id,document_type,country);
         CREATE INDEX IF NOT EXISTS idx_documents_expiry ON documents(expiry_date);
+        CREATE TABLE IF NOT EXISTS personal_cases(
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'personal',
+          status TEXT NOT NULL DEFAULT 'active',
+          priority INTEGER NOT NULL DEFAULT 2,
+          color TEXT NOT NULL DEFAULT '#5b7cfa',
+          notes TEXT NOT NULL DEFAULT '',
+          next_action TEXT NOT NULL DEFAULT '',
+          due_date TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS personal_items(
+          id TEXT PRIMARY KEY,
+          item_type TEXT NOT NULL DEFAULT 'task',
+          title TEXT NOT NULL,
+          details TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'inbox',
+          priority INTEGER NOT NULL DEFAULT 2,
+          due_at TEXT NOT NULL DEFAULT '',
+          follow_up_at TEXT NOT NULL DEFAULT '',
+          repeat_rule TEXT NOT NULL DEFAULT '',
+          case_id TEXT NOT NULL DEFAULT '',
+          document_id TEXT NOT NULL DEFAULT '',
+          source TEXT NOT NULL DEFAULT 'manual',
+          amount REAL,
+          currency TEXT NOT NULL DEFAULT '',
+          metadata TEXT NOT NULL DEFAULT '{}',
+          completed_at TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_personal_items_status ON personal_items(status);
+        CREATE INDEX IF NOT EXISTS idx_personal_items_due ON personal_items(due_at);
+        CREATE INDEX IF NOT EXISTS idx_personal_items_followup ON personal_items(follow_up_at);
+        CREATE INDEX IF NOT EXISTS idx_personal_items_case ON personal_items(case_id);
         """)
         try:
             con.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts2
@@ -584,6 +621,248 @@ def home():
 @app.get("/telegram/",response_class=HTMLResponse)
 def telegram_mini_app():
     return (WEB/"telegram.html").read_text(encoding="utf-8")
+
+@app.get("/personal",response_class=HTMLResponse)
+@app.get("/personal/",response_class=HTMLResponse)
+def personal_assistant():
+    return (WEB/"personal.html").read_text(encoding="utf-8")
+
+PERSONAL_STATUSES={"inbox","today","scheduled","waiting","done","archived"}
+PERSONAL_TYPES={"task","reminder","payment","trip","note","email","document","call","appointment"}
+PERSONAL_CASE_STATUSES={"active","paused","done","archived"}
+PERSONAL_TIMEZONE=timezone(timedelta(hours=3,minutes=30))
+
+def _personal_today():
+    return datetime.now(PERSONAL_TIMEZONE).date()
+
+def _clean_personal_text(value,limit=4000):
+    return str(value or "").strip()[:limit]
+
+def _clean_personal_datetime(value):
+    value=_clean_personal_text(value,40)
+    if not value:return ""
+    try:
+        datetime.fromisoformat(value.replace("Z","+00:00"))
+    except ValueError:
+        raise HTTPException(400,"Invalid date or time")
+    return value
+
+def _personal_item(row):
+    item=dict(row)
+    try:item["metadata"]=json.loads(item.get("metadata") or "{}")
+    except Exception:item["metadata"]={}
+    today=_personal_today().isoformat()
+    due=(item.get("due_at") or "")[:10]
+    item["is_overdue"]=bool(due and due<today and item["status"] not in ("done","archived"))
+    item["is_due_today"]=bool(due==today and item["status"] not in ("done","archived"))
+    return item
+
+def _get_personal_item(con,item_id):
+    row=con.execute("""SELECT i.*,coalesce(c.title,'') AS case_title,coalesce(c.color,'') AS case_color
+        FROM personal_items i LEFT JOIN personal_cases c ON c.id=i.case_id WHERE i.id=?""",(item_id,)).fetchone()
+    if not row:raise HTTPException(404,"Personal item not found")
+    return row
+
+def _validate_personal_case(con,case_id):
+    if case_id and not con.execute("SELECT 1 FROM personal_cases WHERE id=?",(case_id,)).fetchone():
+        raise HTTPException(400,"Unknown personal case")
+
+@app.get("/api/personal/dashboard")
+def personal_dashboard():
+    local_date=_personal_today()
+    today=local_date.isoformat()
+    tomorrow=(local_date+timedelta(days=1)).isoformat()
+    next_week=(local_date+timedelta(days=7)).isoformat()
+    base="status NOT IN ('done','archived')"
+    select="""SELECT i.*,coalesce(c.title,'') AS case_title,coalesce(c.color,'') AS case_color
+        FROM personal_items i LEFT JOIN personal_cases c ON c.id=i.case_id"""
+    with db() as con:
+        counts={
+            "inbox":con.execute("SELECT count(*) FROM personal_items WHERE status='inbox'").fetchone()[0],
+            "today":con.execute("SELECT count(*) FROM personal_items WHERE status='today' OR (due_at<>'' AND substr(due_at,1,10)=? AND "+base+")",(today,)).fetchone()[0],
+            "overdue":con.execute("SELECT count(*) FROM personal_items WHERE due_at<>'' AND substr(due_at,1,10)<? AND "+base,(today,)).fetchone()[0],
+            "waiting":con.execute("SELECT count(*) FROM personal_items WHERE status='waiting'").fetchone()[0],
+            "done":con.execute("SELECT count(*) FROM personal_items WHERE status='done' AND substr(completed_at,1,10)=?",(today,)).fetchone()[0],
+            "active_cases":con.execute("SELECT count(*) FROM personal_cases WHERE status='active'").fetchone()[0],
+        }
+        focus=list(con.execute(select+" WHERE i.status NOT IN ('done','archived') AND (i.status='today' OR (i.due_at<>'' AND substr(i.due_at,1,10)<=?)) ORDER BY CASE WHEN substr(i.due_at,1,10)<? THEN 0 ELSE 1 END,i.priority DESC,i.due_at LIMIT 20",(today,today)))
+        waiting=list(con.execute(select+" WHERE i.status='waiting' ORDER BY CASE WHEN i.follow_up_at='' THEN 1 ELSE 0 END,i.follow_up_at LIMIT 12"))
+        upcoming=list(con.execute(select+" WHERE i.status NOT IN ('done','archived','today') AND i.due_at<>'' AND substr(i.due_at,1,10)>=? AND substr(i.due_at,1,10)<=? ORDER BY i.due_at LIMIT 12",(tomorrow,next_week)))
+        inbox=list(con.execute(select+" WHERE i.status='inbox' ORDER BY i.created_at DESC LIMIT 8"))
+    return {"date":today,"counts":counts,"focus":[_personal_item(x) for x in focus],"waiting":[_personal_item(x) for x in waiting],"upcoming":[_personal_item(x) for x in upcoming],"inbox":[_personal_item(x) for x in inbox]}
+
+@app.get("/api/personal/items")
+def personal_items(status:str="",item_type:str="",case_id:str="",q:str="",limit:int=200):
+    where=["1=1"];args=[]
+    if status:
+        if status=="open":where.append("i.status NOT IN ('done','archived')")
+        elif status=="overdue":
+            where.append("i.status NOT IN ('done','archived') AND i.due_at<>'' AND substr(i.due_at,1,10)<?")
+            args.append(_personal_today().isoformat())
+        elif status in PERSONAL_STATUSES:where.append("i.status=?");args.append(status)
+        else:raise HTTPException(400,"Unknown status")
+    if item_type:
+        if item_type not in PERSONAL_TYPES:raise HTTPException(400,"Unknown item type")
+        where.append("i.item_type=?");args.append(item_type)
+    if case_id:where.append("i.case_id=?");args.append(case_id)
+    if q.strip():
+        term=f"%{q.strip()}%";where.append("(i.title LIKE ? OR i.details LIKE ? OR c.title LIKE ?)");args.extend([term,term,term])
+    limit=max(1,min(limit,500))
+    sql="""SELECT i.*,coalesce(c.title,'') AS case_title,coalesce(c.color,'') AS case_color
+        FROM personal_items i LEFT JOIN personal_cases c ON c.id=i.case_id
+        WHERE %s ORDER BY CASE i.status WHEN 'today' THEN 0 WHEN 'inbox' THEN 1 WHEN 'waiting' THEN 2 WHEN 'scheduled' THEN 3 WHEN 'done' THEN 4 ELSE 5 END,
+        CASE WHEN i.due_at='' THEN 1 ELSE 0 END,i.due_at,i.priority DESC,i.created_at DESC LIMIT ?"""%(" AND ".join(where))
+    with db() as con:rows=list(con.execute(sql,[*args,limit]))
+    return {"items":[_personal_item(x) for x in rows],"count":len(rows)}
+
+@app.post("/api/personal/items")
+def create_personal_item(payload:dict=Body(...)):
+    title=_clean_personal_text(payload.get("title"),240)
+    if not title:raise HTTPException(400,"Title is required")
+    item_type=_clean_personal_text(payload.get("item_type") or "task",30)
+    status=_clean_personal_text(payload.get("status") or "inbox",30)
+    if item_type not in PERSONAL_TYPES:raise HTTPException(400,"Unknown item type")
+    if status not in PERSONAL_STATUSES:raise HTTPException(400,"Unknown status")
+    priority=max(1,min(int(payload.get("priority",2) or 2),3))
+    due_at=_clean_personal_datetime(payload.get("due_at"))
+    follow_up_at=_clean_personal_datetime(payload.get("follow_up_at"))
+    case_id=_clean_personal_text(payload.get("case_id"),80)
+    amount=payload.get("amount")
+    try:amount=float(amount) if amount not in (None,"") else None
+    except (TypeError,ValueError):raise HTTPException(400,"Invalid amount")
+    item_id=str(uuid.uuid4());stamp=now()
+    with db() as con:
+        _validate_personal_case(con,case_id)
+        con.execute("""INSERT INTO personal_items(id,item_type,title,details,status,priority,due_at,follow_up_at,repeat_rule,case_id,document_id,source,amount,currency,metadata,completed_at,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(
+            item_id,item_type,title,_clean_personal_text(payload.get("details")),status,priority,due_at,follow_up_at,
+            _clean_personal_text(payload.get("repeat_rule"),100),case_id,_clean_personal_text(payload.get("document_id"),80),
+            _clean_personal_text(payload.get("source") or "manual",50),amount,_clean_personal_text(payload.get("currency"),12),
+            json.dumps(payload.get("metadata") if isinstance(payload.get("metadata"),dict) else {},ensure_ascii=False),
+            stamp if status=="done" else "",stamp,stamp))
+        row=_get_personal_item(con,item_id)
+    return {"ok":True,"item":_personal_item(row)}
+
+@app.post("/api/personal/capture")
+def capture_personal_item(payload:dict=Body(...)):
+    text=_clean_personal_text(payload.get("text"),4000)
+    if not text:raise HTTPException(400,"Text is required")
+    lines=[x.strip() for x in text.splitlines() if x.strip()]
+    item_type=_clean_personal_text(payload.get("item_type") or "note",30)
+    if item_type not in PERSONAL_TYPES:item_type="note"
+    return create_personal_item({"title":lines[0][:240],"details":"\n".join(lines[1:]),"item_type":item_type,"status":"inbox","source":"quick_capture"})
+
+@app.patch("/api/personal/items/{item_id}")
+def update_personal_item(item_id:str,payload:dict=Body(...)):
+    allowed={"item_type","title","details","status","priority","due_at","follow_up_at","repeat_rule","case_id","document_id","source","amount","currency","metadata"}
+    updates=[];args=[]
+    with db() as con:
+        current=_get_personal_item(con,item_id)
+        for key,value in payload.items():
+            if key not in allowed:continue
+            if key=="title":
+                value=_clean_personal_text(value,240)
+                if not value:raise HTTPException(400,"Title is required")
+            elif key in ("details","metadata"):
+                value=json.dumps(value,ensure_ascii=False) if key=="metadata" and isinstance(value,dict) else _clean_personal_text(value)
+            elif key=="status":
+                value=_clean_personal_text(value,30)
+                if value not in PERSONAL_STATUSES:raise HTTPException(400,"Unknown status")
+            elif key=="item_type":
+                value=_clean_personal_text(value,30)
+                if value not in PERSONAL_TYPES:raise HTTPException(400,"Unknown item type")
+            elif key=="priority":value=max(1,min(int(value or 2),3))
+            elif key in ("due_at","follow_up_at"):value=_clean_personal_datetime(value)
+            elif key=="case_id":
+                value=_clean_personal_text(value,80);_validate_personal_case(con,value)
+            elif key=="amount":
+                try:value=float(value) if value not in (None,"") else None
+                except (TypeError,ValueError):raise HTTPException(400,"Invalid amount")
+            else:value=_clean_personal_text(value,240)
+            updates.append(f"{key}=?");args.append(value)
+        if not updates:return {"ok":True,"item":_personal_item(current)}
+        if payload.get("status")=="done":updates.append("completed_at=?");args.append(now())
+        elif "status" in payload and current["status"]=="done":updates.append("completed_at=?");args.append("")
+        updates.append("updated_at=?");args.append(now());args.append(item_id)
+        con.execute(f"UPDATE personal_items SET {','.join(updates)} WHERE id=?",args)
+        row=_get_personal_item(con,item_id)
+    return {"ok":True,"item":_personal_item(row)}
+
+@app.delete("/api/personal/items/{item_id}")
+def delete_personal_item(item_id:str):
+    with db() as con:
+        if not con.execute("SELECT 1 FROM personal_items WHERE id=?",(item_id,)).fetchone():raise HTTPException(404)
+        con.execute("DELETE FROM personal_items WHERE id=?",(item_id,))
+    return {"ok":True}
+
+@app.get("/api/personal/cases")
+def personal_cases(status:str=""):
+    where="WHERE c.status=?" if status in PERSONAL_CASE_STATUSES else "";args=[status] if where else []
+    with db() as con:
+        rows=list(con.execute(f"""SELECT c.*,
+            sum(CASE WHEN i.status NOT IN ('done','archived') THEN 1 ELSE 0 END) AS open_items,
+            sum(CASE WHEN i.status='done' THEN 1 ELSE 0 END) AS done_items
+            FROM personal_cases c LEFT JOIN personal_items i ON i.case_id=c.id {where}
+            GROUP BY c.id ORDER BY CASE c.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END,c.priority DESC,c.updated_at DESC""",args))
+    return {"items":[dict(x) for x in rows],"count":len(rows)}
+
+@app.post("/api/personal/cases")
+def create_personal_case(payload:dict=Body(...)):
+    title=_clean_personal_text(payload.get("title"),240)
+    if not title:raise HTTPException(400,"Title is required")
+    status=_clean_personal_text(payload.get("status") or "active",30)
+    if status not in PERSONAL_CASE_STATUSES:raise HTTPException(400,"Unknown case status")
+    case_id=str(uuid.uuid4());stamp=now()
+    with db() as con:
+        con.execute("""INSERT INTO personal_cases(id,title,kind,status,priority,color,notes,next_action,due_date,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",(case_id,title,_clean_personal_text(payload.get("kind") or "personal",50),status,
+            max(1,min(int(payload.get("priority",2) or 2),3)),_clean_personal_text(payload.get("color") or "#5b7cfa",20),
+            _clean_personal_text(payload.get("notes")),_clean_personal_text(payload.get("next_action"),500),
+            _clean_personal_datetime(payload.get("due_date"))[:10],stamp,stamp))
+        row=con.execute("SELECT * FROM personal_cases WHERE id=?",(case_id,)).fetchone()
+    return {"ok":True,"item":dict(row)}
+
+@app.patch("/api/personal/cases/{case_id}")
+def update_personal_case(case_id:str,payload:dict=Body(...)):
+    allowed={"title","kind","status","priority","color","notes","next_action","due_date"};updates=[];args=[]
+    with db() as con:
+        if not con.execute("SELECT 1 FROM personal_cases WHERE id=?",(case_id,)).fetchone():raise HTTPException(404)
+        for key,value in payload.items():
+            if key not in allowed:continue
+            if key=="title":
+                value=_clean_personal_text(value,240)
+                if not value:raise HTTPException(400,"Title is required")
+            elif key=="status":
+                value=_clean_personal_text(value,30)
+                if value not in PERSONAL_CASE_STATUSES:raise HTTPException(400,"Unknown case status")
+            elif key=="priority":value=max(1,min(int(value or 2),3))
+            elif key=="due_date":value=_clean_personal_datetime(value)[:10]
+            else:value=_clean_personal_text(value,4000 if key=="notes" else 500)
+            updates.append(f"{key}=?");args.append(value)
+        if updates:
+            updates.append("updated_at=?");args.append(now());args.append(case_id)
+            con.execute(f"UPDATE personal_cases SET {','.join(updates)} WHERE id=?",args)
+        row=con.execute("SELECT * FROM personal_cases WHERE id=?",(case_id,)).fetchone()
+    return {"ok":True,"item":dict(row)}
+
+@app.delete("/api/personal/cases/{case_id}")
+def delete_personal_case(case_id:str):
+    with db() as con:
+        con.execute("UPDATE personal_items SET case_id='',updated_at=? WHERE case_id=?",(now(),case_id))
+        changed=con.execute("DELETE FROM personal_cases WHERE id=?",(case_id,)).rowcount
+        if not changed:raise HTTPException(404)
+    return {"ok":True}
+
+@app.get("/api/personal/search")
+def personal_search(q:str=""):
+    q=q.strip()
+    if len(q)<2:return {"items":[]}
+    term=f"%{q}%"
+    with db() as con:
+        tasks=[dict(x) for x in con.execute("SELECT id,title,details,status,item_type,updated_at FROM personal_items WHERE title LIKE ? OR details LIKE ? ORDER BY updated_at DESC LIMIT 20",(term,term))]
+        cases=[dict(x) for x in con.execute("SELECT id,title,notes,status,'case' AS item_type,updated_at FROM personal_cases WHERE title LIKE ? OR notes LIKE ? ORDER BY updated_at DESC LIMIT 10",(term,term))]
+        docs=[dict(x) for x in con.execute("SELECT id,title,original_name AS details,'document' AS status,'document' AS item_type,updated_at FROM documents WHERE deleted=0 AND (title LIKE ? OR original_name LIKE ? OR notes LIKE ?) ORDER BY updated_at DESC LIMIT 20",(term,term,term))]
+    return {"items":[*tasks,*cases,*docs]}
 
 @app.get("/api/stats")
 def stats():
