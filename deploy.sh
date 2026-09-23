@@ -9,6 +9,10 @@ cd "$PROJECT"
 echo "===== PRE-FLIGHT ====="
 test -f docker-compose.yml
 test -f archive_v2/main.py
+test -s archive_v2/web/home.html
+test -s archive_v2/web/personal.html
+test -s archive_v2/web/work.html
+test -s archive_v2/web/index.html
 test -f intake-worker/worker.py
 test -f telegram-bot/bot.py
 

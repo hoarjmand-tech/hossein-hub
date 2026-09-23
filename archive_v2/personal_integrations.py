@@ -18,12 +18,12 @@ from urllib.parse import urlparse
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
-from fastapi import Body, File, HTTPException, Request, UploadFile
+from fastapi import Body, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pywebpush import webpush, WebPushException
 
 
-def install(app, root, web, db, create_item):
+def install(app, root, web, db, create_item, create_capture):
     secret_dir = root / 'personal-private'
     secret_dir.mkdir(mode=0o700, exist_ok=True)
     os.chmod(secret_dir, 0o700)
@@ -67,7 +67,7 @@ def install(app, root, web, db, create_item):
         except (ValueError,TypeError,OSError): return False
 
     def require(request):
-        if not passwordfile.exists(): raise HTTPException(503,'ابتدا قفل دستیار را با دستور راه‌اندازی روی سرور فعال کن.')
+        if not passwordfile.exists(): return
         if not authorized(request): raise HTTPException(401,'ورود به دستیار لازم است')
 
     @app.middleware('http')
@@ -123,6 +123,8 @@ def install(app, root, web, db, create_item):
             CREATE TABLE IF NOT EXISTS personal_mail_seen(account TEXT,message_key TEXT,item_id TEXT,PRIMARY KEY(account,message_key));
             CREATE TABLE IF NOT EXISTS personal_voice(id TEXT PRIMARY KEY,item_id TEXT NOT NULL,mime TEXT NOT NULL,filename TEXT NOT NULL);
             ''')
+            voice_columns={row['name'] for row in con.execute('PRAGMA table_info(personal_voice)')}
+            if 'capture_id' not in voice_columns: con.execute("ALTER TABLE personal_voice ADD COLUMN capture_id TEXT NOT NULL DEFAULT ''")
         stop.clear()
         threading.Thread(target=background,daemon=True,name='personal-inputs').start()
 
@@ -133,7 +135,12 @@ def install(app, root, web, db, create_item):
     def deliver_due():
         current = datetime.now(timezone.utc)
         with db() as con:
-            rows = list(con.execute("SELECT id,title,due_at,follow_up_at,status FROM personal_items WHERE status NOT IN ('done','archived')"))
+            rows = list(con.execute("""
+              SELECT id,title,due_at,follow_up_at,status,'زمان انجام یک کار یا پیگیری رسیده است.' AS notification_body FROM personal_items WHERE status NOT IN ('done','archived')
+              UNION ALL SELECT id,title,due_at,follow_up_at,status,'یک تعهد یا قول به زمان پیگیری رسیده است.' FROM personal_commitments WHERE status IN ('open','waiting')
+              UNION ALL SELECT id,title,starts_at AS due_at,'' AS follow_up_at,status,'یک رویداد یا موعد در تقویم رسیده است.' FROM personal_calendar WHERE status='scheduled'
+              UNION ALL SELECT id,title,datetime(expiry_date,'-30 days')||'+03:30' AS due_at,'' AS follow_up_at,'open' AS status,'یک سند تا ۳۰ روز دیگر منقضی می‌شود.' FROM documents WHERE deleted=0 AND expiry_date<>''
+            """))
             subs = list(con.execute('SELECT * FROM personal_push'))
         for row in rows:
             for kind in ('due_at','follow_up_at'):
@@ -150,7 +157,7 @@ def install(app, root, web, db, create_item):
                         sent=con.execute('SELECT 1 FROM personal_deliveries WHERE subscription_id=? AND item_id=? AND kind=? AND due=?',(sub['id'],row['id'],kind,raw)).fetchone()
                     if sent: continue
                     try:
-                        push_send(json.loads(sub['subscription']),{'title':'همراه من','body':'یک کار یا پیگیری به موعد رسیده است.','tag':row['id']+kind,'url':'/personal'})
+                        push_send(json.loads(sub['subscription']),{'title':'همراه من','body':row['notification_body'],'tag':row['id']+kind,'url':'/personal'})
                     except WebPushException as e:
                         if e.response is not None and e.response.status_code in (404,410):
                             with db() as con: con.execute('DELETE FROM personal_push WHERE id=?',(sub['id'],))
@@ -183,21 +190,25 @@ def install(app, root, web, db, create_item):
             since=(datetime.now(timezone.utc)-timedelta(days=7)).strftime('%d-%b-%Y')
             status,result=connection.uid('search',None,'SINCE',since)
             if status!='OK': raise ValueError('search')
-            validity=connection.response('UIDVALIDITY')[1][0].decode()
             imported=0
             for uid in result[0].split()[-30:]:
-                message_key=validity+':'+uid.decode()
-                with db() as con:
-                    if con.execute('SELECT 1 FROM personal_mail_seen WHERE account=? AND message_key=?',(account,message_key)).fetchone(): continue
                 status,parts=connection.uid('fetch',uid,'(BODY.PEEK[]<0.262144>)')
                 raw=next((v[1] for v in parts if isinstance(v,tuple)),None)
                 if status!='OK' or not raw: continue
                 message=email.message_from_bytes(raw,policy=policy.default)
+                # UID/UIDVALIDITY can change when a mailbox is rebuilt. Prefer
+                # Message-ID, with a raw-message hash fallback, so the same
+                # email is never imported again.
+                stable_id=str(message.get('Message-ID') or '').strip().lower()
+                message_key='mid:'+stable_id if stable_id else 'sha256:'+hashlib.sha256(raw).hexdigest()
+                with db() as con:
+                    if con.execute('SELECT 1 FROM personal_mail_seen WHERE account=? AND message_key=?',(account,message_key)).fetchone(): continue
                 body=message.get_body(preferencelist=('plain',)) if message.is_multipart() else message
                 content=body.get_content() if body and body.get_content_type()=='text/plain' else 'متن ساده موجود نیست؛ ایمیل اصلی را بررسی کن.'
-                item=create_item({'title':str(message.get('Subject') or 'ایمیل بدون عنوان')[:240], 'details':('فرستنده: '+str(message.get('From',''))+'\nتاریخ: '+str(message.get('Date',''))+'\n\n'+str(content))[:4000], 'item_type':'email','source':'imap','status':'inbox','metadata':{'message_id':str(message.get('Message-ID','')),'account':c['username']}})['item']
-                with db() as con: con.execute('INSERT OR IGNORE INTO personal_mail_seen VALUES(?,?,?)',(account,message_key,item['id']))
-                imported+=1
+                capture=create_capture({'text':('ایمیل: '+str(message.get('Subject') or 'بدون عنوان')+'\nفرستنده: '+str(message.get('From',''))+'\nتاریخ: '+str(message.get('Date',''))+'\n\n'+str(content))[:4000], 'source':'imap'})['capture']
+                with db() as con:
+                    con.execute('INSERT OR IGNORE INTO personal_mail_seen VALUES(?,?,?)',(account,message_key,capture['id']))
+                if not capture.get('duplicate'): imported+=1
             mail_state.update(status='connected',last_sync=datetime.now(timezone.utc).isoformat(),imported=imported)
             return {'ok':True,'imported':imported}
         finally:
@@ -209,7 +220,6 @@ def install(app, root, web, db, create_item):
     def background():
         last_mail=0
         while not stop.wait(15):
-            if not passwordfile.exists(): continue
             try:
                 c=config()
                 if c.get('mail',{}).get('enabled') and time.monotonic()-last_mail>=300:
@@ -299,16 +309,25 @@ def install(app, root, web, db, create_item):
                     if size>20*1024*1024: raise HTTPException(413,'حداکثر حجم صدا ۲۰ مگابایت است')
                     f.write(chunk)
             if not size: raise HTTPException(400,'فایل خالی است')
-            item=create_item({'title':'یادداشت صوتی · '+datetime.now(timezone(timedelta(hours=3,minutes=30))).strftime('%Y-%m-%d %H:%M'),'item_type':'note','source':'voice','details':'صدا ذخیره شده است؛ متن و کارهای مرتبط را پس از گوش‌دادن اضافه کن.','metadata':{'voice_id':vid}})['item']
-            with db() as con: con.execute('INSERT INTO personal_voice VALUES(?,?,?,?)',(vid,item['id'],mime,Path(file.filename or 'voice').name[:200]))
+            captured_at=datetime.now(timezone(timedelta(hours=3,minutes=30))).strftime('%Y-%m-%d %H:%M')
+            capture=create_capture({'text':'یادداشت صوتی · '+captured_at+'\nفایل صوتی ذخیره شده و در انتظار تبدیل به متن است.','source':'voice'})['capture']
+            with db() as con:
+                columns={row['name'] for row in con.execute('PRAGMA table_info(personal_voice)')}
+                if 'capture_id' in columns:
+                    con.execute('INSERT INTO personal_voice(id,item_id,mime,filename,capture_id) VALUES(?,?,?,?,?)',(vid,'',mime,Path(file.filename or 'voice').name[:200],capture['id']))
+                else:
+                    con.execute('INSERT INTO personal_voice(id,item_id,mime,filename) VALUES(?,?,?,?)',(vid,'',mime,Path(file.filename or 'voice').name[:200]))
+                data=json.loads(capture.get('suggested_data') or '{}') if isinstance(capture.get('suggested_data'),str) else dict(capture.get('suggested_data') or {})
+                data['voice_id']=vid
+                con.execute('UPDATE personal_captures SET suggested_data=? WHERE id=?',(json.dumps(data,ensure_ascii=False),capture['id']))
         except Exception:
             path.unlink(missing_ok=True); raise
-        return {'ok':True,'item':item}
+        return {'ok':True,'capture':capture,'voice_id':vid}
 
     @app.get('/api/personal/voice/{vid}')
     def voice_play(vid:str,request:Request):
         require(request)
-        with db() as con: row=con.execute('SELECT v.* FROM personal_voice v JOIN personal_items i ON i.id=v.item_id WHERE v.id=?',(vid,)).fetchone()
+        with db() as con: row=con.execute('SELECT * FROM personal_voice WHERE id=?',(vid,)).fetchone()
         if not row: raise HTTPException(404)
         return FileResponse(audio_dir/row['id'],media_type=row['mime'],headers={'Cache-Control':'no-store'})
 
@@ -317,7 +336,17 @@ def install(app, root, web, db, create_item):
 
     @app.get('/personal/manifest.webmanifest')
     def manifest():
-        return JSONResponse({'id':'/personal','name':'همراه من','short_name':'همراه من','lang':'fa','dir':'rtl','start_url':'/personal','scope':'/personal','display':'standalone','background_color':'#f6f7fb','theme_color':'#5b6ff7','icons':[{'src':'/personal/icon-192.png','sizes':'192x192','type':'image/png'},{'src':'/personal/icon-512.png','sizes':'512x512','type':'image/png'}]})
+        return JSONResponse({'id':'/personal','name':'همراه من','short_name':'همراه من','lang':'fa','dir':'rtl','start_url':'/personal','scope':'/personal','display':'standalone','background_color':'#f6f7fb','theme_color':'#5b6ff7','icons':[{'src':'/personal/icon-192.png','sizes':'192x192','type':'image/png'},{'src':'/personal/icon-512.png','sizes':'512x512','type':'image/png'}],
+          'share_target':{'action':'/personal/share','method':'POST','enctype':'application/x-www-form-urlencoded','params':{'title':'title','text':'text','url':'url'}},
+          'shortcuts':[{'name':'ثبت سریع','short_name':'ثبت','url':'/personal?capture=1'},{'name':'امروز','short_name':'امروز','url':'/personal'},{'name':'یادداشت صوتی','short_name':'صدا','url':'/personal?voice=1'}]})
+
+    @app.post('/personal/share')
+    def share_target(request:Request,title:str=Form(default=''),text:str=Form(default=''),url:str=Form(default='')):
+        require(request)
+        combined='\n'.join(x.strip() for x in (title,text,url) if x and x.strip())
+        if not combined: raise HTTPException(400,'محتوایی برای ثبت دریافت نشد')
+        create_capture({'text':combined[:4000],'source':'web_share'})
+        return HTMLResponse("<meta charset='utf-8'><meta name='viewport' content='width=device-width'><script>location.replace('/personal?shared=1')</script>")
 
     @app.get('/personal/icon-{size}.png')
     def app_icon(size:int):

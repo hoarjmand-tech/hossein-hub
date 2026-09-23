@@ -31,11 +31,10 @@ class PersonalInputsTest(unittest.TestCase):
             self.assertEqual(c.get('/api/personal/integrations').status_code,200)
             voice=c.post('/api/personal/voice',files={'file':('sample.wav',b'RIFF1234WAVEfmt ','audio/wav')})
             self.assertEqual(voice.status_code,200,voice.text)
-            item=voice.json()['item'];vid=item['metadata']['voice_id']
+            self.assertIn('capture',voice.json())
+            vid=voice.json()['voice_id']
             self.assertEqual(c.get('/api/personal/voice/'+vid).status_code,200)
-            self.assertEqual(c.delete('/api/personal/items/'+item['id']).status_code,200)
-            self.assertFalse((main.ROOT/'personal-private/voice'/vid).exists())
-            self.assertEqual(c.get('/api/personal/voice/'+vid).status_code,404)
+            self.assertTrue((main.ROOT/'personal-private/voice'/vid).exists())
             self.assertEqual(c.post('/api/personal/voice',files={'file':('bad.html',b'<script>','text/html')}).status_code,400)
             self.assertEqual(c.post('/api/personal/integrations/mail',json={'host':'localhost','username':'x','password':'x'}).status_code,400)
             with patch('personal_integrations.imaplib.IMAP4_SSL',FakeIMAP):

@@ -7,6 +7,7 @@ import re
 import secrets
 import shutil
 import sqlite3
+import socket
 import subprocess
 import tempfile
 import threading
@@ -18,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import BinaryIO
 from urllib.parse import parse_qsl
+from urllib.request import Request as URLRequest, urlopen
 
 import magic
 from fastapi import Body, Cookie, FastAPI, File, Header, HTTPException, Request, Response, UploadFile
@@ -158,6 +160,9 @@ def init_db():
             "issue_date":"TEXT NOT NULL DEFAULT ''",
             "expiry_date":"TEXT NOT NULL DEFAULT ''",
             "version_no":"INTEGER NOT NULL DEFAULT 1",
+            "project_id":"TEXT NOT NULL DEFAULT ''",
+            "action_status":"TEXT NOT NULL DEFAULT 'none'",
+            "follow_up_at":"TEXT NOT NULL DEFAULT ''",
         }
         for column,declaration in document_migrations.items():
             if column not in dcols:
@@ -256,7 +261,125 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_personal_items_due ON personal_items(due_at);
         CREATE INDEX IF NOT EXISTS idx_personal_items_followup ON personal_items(follow_up_at);
         CREATE INDEX IF NOT EXISTS idx_personal_items_case ON personal_items(case_id);
+        CREATE TABLE IF NOT EXISTS personal_captures(
+          id TEXT PRIMARY KEY,
+          raw_text TEXT NOT NULL,
+          normalized_hash TEXT NOT NULL UNIQUE,
+          source TEXT NOT NULL DEFAULT 'manual',
+          status TEXT NOT NULL DEFAULT 'captured',
+          suggested_type TEXT NOT NULL DEFAULT 'note',
+          suggested_title TEXT NOT NULL DEFAULT '',
+          suggested_data TEXT NOT NULL DEFAULT '{}',
+          confirmed_item_id TEXT NOT NULL DEFAULT '',
+          confirmed_fact_id TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          confirmed_at TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_personal_captures_status ON personal_captures(status,created_at DESC);
+        CREATE TABLE IF NOT EXISTS personal_projects(
+          id TEXT PRIMARY KEY, title TEXT NOT NULL, aliases TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_personal_projects_title ON personal_projects(title COLLATE NOCASE);
+        CREATE TABLE IF NOT EXISTS personal_links(
+          id TEXT PRIMARY KEY, source_type TEXT NOT NULL, source_id TEXT NOT NULL,
+          target_type TEXT NOT NULL, target_id TEXT NOT NULL, relation TEXT NOT NULL DEFAULT 'related',
+          confidence INTEGER NOT NULL DEFAULT 100, source TEXT NOT NULL DEFAULT 'manual', created_at TEXT NOT NULL,
+          UNIQUE(source_type,source_id,target_type,target_id,relation)
+        );
+        CREATE INDEX IF NOT EXISTS idx_personal_links_target ON personal_links(target_type,target_id);
+        CREATE TABLE IF NOT EXISTS personal_events(
+          id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL,
+          action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_personal_events_subject ON personal_events(subject_type,subject_id,created_at DESC);
+        CREATE TABLE IF NOT EXISTS personal_facts(
+          id TEXT PRIMARY KEY,
+          fact_type TEXT NOT NULL,
+          label TEXT NOT NULL,
+          value TEXT NOT NULL,
+          details TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'active',
+          confidence TEXT NOT NULL DEFAULT 'confirmed',
+          case_id TEXT NOT NULL DEFAULT '',
+          entity_id TEXT NOT NULL DEFAULT '',
+          source_capture_id TEXT NOT NULL DEFAULT '',
+          fingerprint TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_personal_facts_status ON personal_facts(status,updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_personal_facts_case ON personal_facts(case_id);
+        CREATE TABLE IF NOT EXISTS personal_fact_events(
+          id TEXT PRIMARY KEY,
+          fact_id TEXT NOT NULL REFERENCES personal_facts(id) ON DELETE CASCADE,
+          action TEXT NOT NULL,
+          snapshot TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_personal_fact_events_fact ON personal_fact_events(fact_id,created_at DESC);
+        CREATE TABLE IF NOT EXISTS work_devices(
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'server',
+          site TEXT NOT NULL DEFAULT 'Tehran',
+          address TEXT NOT NULL,
+          port INTEGER NOT NULL DEFAULT 0,
+          protocol TEXT NOT NULL DEFAULT 'tcp',
+          enabled INTEGER NOT NULL DEFAULT 1,
+          tags TEXT NOT NULL DEFAULT '',
+          last_status TEXT NOT NULL DEFAULT 'unknown',
+          last_checked_at TEXT NOT NULL DEFAULT '',
+          latency_ms REAL,
+          details TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_work_devices_enabled ON work_devices(enabled);
+        CREATE TABLE IF NOT EXISTS work_events(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          device_id TEXT,
+          kind TEXT NOT NULL,
+          severity TEXT NOT NULL DEFAULT 'info',
+          message TEXT NOT NULL,
+          details TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_work_events_created ON work_events(created_at DESC);
+        CREATE TABLE IF NOT EXISTS work_actions(
+          id TEXT PRIMARY KEY,
+          device_id TEXT,
+          task TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          requested_by TEXT NOT NULL DEFAULT 'web',
+          result TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          approved_at TEXT NOT NULL DEFAULT '',
+          completed_at TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_work_actions_status ON work_actions(status,created_at DESC);
         """)
+        ccols={r["name"] for r in con.execute("PRAGMA table_info(personal_captures)")}
+        if "project_id" not in ccols: con.execute("ALTER TABLE personal_captures ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
+        if "suggested_project_id" not in ccols: con.execute("ALTER TABLE personal_captures ADD COLUMN suggested_project_id TEXT NOT NULL DEFAULT ''")
+        if "project_confidence" not in ccols: con.execute("ALTER TABLE personal_captures ADD COLUMN project_confidence INTEGER NOT NULL DEFAULT 0")
+        icols={r["name"] for r in con.execute("PRAGMA table_info(personal_items)")}
+        if "project_id" not in icols: con.execute("ALTER TABLE personal_items ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
+        fcols={r["name"] for r in con.execute("PRAGMA table_info(personal_facts)")}
+        if "project_id" not in fcols: con.execute("ALTER TABLE personal_facts ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
+        pcols={r["name"] for r in con.execute("PRAGMA table_info(personal_projects)")}
+        for column,declaration in {
+            'goal':"TEXT NOT NULL DEFAULT ''",'next_action':"TEXT NOT NULL DEFAULT ''",
+            'due_date':"TEXT NOT NULL DEFAULT ''",'color':"TEXT NOT NULL DEFAULT '#5b6ff7'",
+            'priority':"INTEGER NOT NULL DEFAULT 2"}.items():
+            if column not in pcols: con.execute(f"ALTER TABLE personal_projects ADD COLUMN {column} {declaration}")
+        for title,aliases in [
+            ('اقامت اتریش','MA35 Beschwerde وین Niederlassung'),('مسیر ایتالیا و دانشگاه','Italy Italia دانشگاه تحصیل'),
+            ('خانه و اجاره وین','خانه اجاره Mietvertrag Wien'),('بیمه و امور بانکی','ARAG ÖGK بیمه Erste بانک'),
+            ('خودرو','اریون Aurion ماشین خودرو'),('زمین و املاک','زمین باغ ملک ویلا'),('سفرها','سفر پرواز هتل'),('سلامت و امور شخصی','سلامت پزشک درمان'),('خانواده','خانواده')]:
+            con.execute("INSERT OR IGNORE INTO personal_projects(id,title,aliases,notes,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",(str(uuid.uuid5(uuid.NAMESPACE_URL,'hossein-project:'+title)),title,aliases,'','active',now(),now()))
         try:
             con.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts2
               USING fts5(id UNINDEXED,title,original_name,ocr_text,tags,category,notes,tokenize='unicode61')""")
@@ -600,6 +723,7 @@ def worker():
 @asynccontextmanager
 async def lifespan(app):
     init_db()
+    personal_v2_start()
     personal_start()
     th=threading.Thread(target=worker,daemon=True,name="archive-ocr")
     th.start()
@@ -607,31 +731,148 @@ async def lifespan(app):
     personal_stop()
     STOP.set()
 
-app=FastAPI(title="Hossein Archive",version="4.6",lifespan=lifespan)
+app=FastAPI(title="Hossein Archive",version="5.0",lifespan=lifespan)
+
+WORK_AGENT_URL=os.getenv("WORK_AGENT_URL","").strip().rstrip("/")
+WORK_AGENT_TOKEN=os.getenv("WORK_AGENT_TOKEN","").strip()
+WORK_ALLOWED_TASKS={x.strip() for x in os.getenv("WORK_ALLOWED_TASKS","status,docker_status,docker_logs,disk_check,health,backup").split(",") if x.strip()}
+
+def _work_device(row):
+    if not row:return None
+    d=dict(row)
+    try:d["details"]=json.loads(d.get("details") or "{}")
+    except Exception:d["details"]={}
+    d["tags"]=[x for x in (d.get("tags") or "").split(",") if x]
+    d["enabled"]=bool(d.get("enabled"))
+    return d
+
+def _work_probe(device):
+    address=str(device.get("address") or "").strip(); protocol=str(device.get("protocol") or "tcp").lower().strip(); port=int(device.get("port") or 0)
+    if not address:return {"status":"error","message":"آدرس دستگاه وارد نشده"}
+    started=time.monotonic()
+    try:
+        if protocol in ("http","https"):
+            url=address if address.startswith(("http://","https://")) else f"{protocol}://{address}{(':'+str(port)) if port else ''}"
+            req=URLRequest(url,headers={"User-Agent":"HosseinHub-WorkMonitor/1.0"},method="GET")
+            with urlopen(req,timeout=5) as resp: code=int(getattr(resp,"status",200))
+            status="up" if 200<=code<500 else "down"; message=f"HTTP {code}"
+        elif protocol=="icmp":
+            proc=subprocess.run(["ping","-c","1","-W","2",address],capture_output=True,text=True,timeout=4)
+            status="up" if proc.returncode==0 else "down"; message="ICMP پاسخ داد" if status=="up" else "ICMP بدون پاسخ"
+        else:
+            if not port:return {"status":"error","message":"برای TCP پورت لازم است"}
+            with socket.create_connection((address,port),timeout=4):pass
+            status="up"; message=f"TCP/{port} باز است"
+        return {"status":status,"message":message,"latency_ms":round((time.monotonic()-started)*1000,1)}
+    except Exception as exc:
+        return {"status":"down","message":str(exc)[:240],"latency_ms":round((time.monotonic()-started)*1000,1)}
+
+def _work_agent(task):
+    if not WORK_AGENT_URL or not WORK_AGENT_TOKEN:return {"ok":False,"error":"WORK_AGENT_URL و WORK_AGENT_TOKEN تنظیم نشده‌اند"}
+    if task not in WORK_ALLOWED_TASKS:return {"ok":False,"error":"این عملیات در فهرست مجاز نیست"}
+    try:
+        req=URLRequest(WORK_AGENT_URL,headers={"Content-Type":"application/json","X-Agent-Token":WORK_AGENT_TOKEN},data=json.dumps({"task":task}).encode(),method="POST")
+        with urlopen(req,timeout=30) as resp:return {"ok":True,"result":json.loads(resp.read().decode("utf-8","replace"))}
+    except Exception as exc:return {"ok":False,"error":str(exc)[:300]}
+
+@app.get("/api/work/overview")
+def work_overview():
+    with db() as con:
+        devices=[_work_device(r) for r in con.execute("SELECT * FROM work_devices WHERE enabled=1 ORDER BY site,name")]
+        events=[dict(r) for r in con.execute("SELECT * FROM work_events ORDER BY id DESC LIMIT 20")]
+        actions=[dict(r) for r in con.execute("SELECT * FROM work_actions ORDER BY created_at DESC LIMIT 10")]
+    counts={"total":len(devices),"up":sum(x["last_status"]=="up" for x in devices),"down":sum(x["last_status"]=="down" for x in devices),"unknown":sum(x["last_status"] not in ("up","down") for x in devices)}
+    return {"counts":counts,"devices":devices,"events":events,"actions":actions,"agent_configured":bool(WORK_AGENT_URL and WORK_AGENT_TOKEN)}
+
+@app.get("/api/work/devices")
+def work_devices():
+    with db() as con:return {"items":[_work_device(r) for r in con.execute("SELECT * FROM work_devices ORDER BY site,name")]}
+
+@app.post("/api/work/devices")
+def work_add_device(payload:dict=Body(default={} )):
+    name=str(payload.get("name") or "").strip()[:120]; address=str(payload.get("address") or "").strip()[:255]
+    if not name or not address:raise HTTPException(400,"نام و آدرس دستگاه لازم است")
+    protocol=str(payload.get("protocol") or "tcp").lower()
+    if protocol not in {"tcp","icmp","http","https"}:raise HTTPException(400,"پروتکل پشتیبانی نمی‌شود")
+    did=uuid.uuid4().hex
+    with db() as con:
+        con.execute("INSERT INTO work_devices(id,name,kind,site,address,port,protocol,tags,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",(did,name,str(payload.get("kind") or "server"),str(payload.get("site") or "Tehran"),address,int(payload.get("port") or 0),protocol,str(payload.get("tags") or ""),now(),now()))
+        row=con.execute("SELECT * FROM work_devices WHERE id=?",(did,)).fetchone()
+    return {"device":_work_device(row)}
+
+@app.post("/api/work/devices/{device_id}/check")
+def work_check_device(device_id:str):
+    with db() as con:
+        row=con.execute("SELECT * FROM work_devices WHERE id=?",(device_id,)).fetchone()
+        if not row:raise HTTPException(404,"دستگاه پیدا نشد")
+        result=_work_probe(dict(row)); detail=json.dumps(result,ensure_ascii=False)
+        con.execute("UPDATE work_devices SET last_status=?,last_checked_at=?,latency_ms=?,details=?,updated_at=? WHERE id=?",(result["status"],now(),result.get("latency_ms"),detail,now(),device_id))
+        con.execute("INSERT INTO work_events(device_id,kind,severity,message,details,created_at) VALUES(?,?,?,?,?,?)",(device_id,"probe","error" if result["status"]=="down" else "info",result.get("message",""),detail,now()))
+        fresh=con.execute("SELECT * FROM work_devices WHERE id=?",(device_id,)).fetchone()
+    return {"device":_work_device(fresh),"result":result}
+
+@app.post("/api/work/actions")
+def work_create_action(payload:dict=Body(default={} )):
+    task=str(payload.get("task") or "").strip()
+    if task not in WORK_ALLOWED_TASKS:raise HTTPException(400,"این عملیات در فهرست مجاز نیست")
+    aid=uuid.uuid4().hex
+    with db() as con:con.execute("INSERT INTO work_actions(id,device_id,task,created_at) VALUES(?,?,?,?)",(aid,str(payload.get("device_id") or ""),task,now()))
+    return {"id":aid,"status":"pending","message":"برای اجرا نیازمند تأیید است"}
+
+@app.post("/api/work/actions/{action_id}/approve")
+def work_approve_action(action_id:str):
+    with db() as con:
+        row=con.execute("SELECT * FROM work_actions WHERE id=?",(action_id,)).fetchone()
+        if not row:raise HTTPException(404,"درخواست پیدا نشد")
+        if row["status"]!="pending":raise HTTPException(409,"این درخواست قبلاً پردازش شده")
+        result=_work_agent(row["task"]); status="done" if result.get("ok") else "failed"
+        con.execute("UPDATE work_actions SET status=?,approved_at=?,completed_at=?,result=? WHERE id=?",(status,now(),now(),json.dumps(result,ensure_ascii=False),action_id))
+    return {"id":action_id,"status":status,"result":result}
 
 @app.get("/health")
 def health():
     with db() as con:
         con.execute("SELECT 1").fetchone()
-    return {"status":"ok","app":"hossein-archive","version":"4.6","storage":"local","storage_path":str(ROOT)}
+    return {"status":"ok","app":"hossein-archive","version":"5.0","storage":"local","storage_path":str(ROOT)}
 
 @app.get("/",response_class=HTMLResponse)
 def home():
+    home_file=WEB/"home.html"
+    if home_file.is_file():
+        return home_file.read_text(encoding="utf-8")
+    # Keep the root usable during an incomplete image copy; never expose a 500 page.
+    return HTMLResponse("""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'>
+    <title>دستیار من</title><style>body{font-family:Tahoma;max-width:760px;margin:12vh auto;padding:24px;background:#f4f6fb;color:#172039}a{display:inline-block;margin:8px;padding:16px 24px;border-radius:14px;background:#536cf7;color:white;text-decoration:none}</style>
+    <h1>دستیار من</h1><p>مرکز برنامه‌ها</p><a href='/personal'>دستیار شخصی</a><a href='/archive'>آرشیو</a><a href='/work'>دستیار کاری</a></html>""")
+
+@app.get("/archive",response_class=HTMLResponse)
+@app.get("/archive/",response_class=HTMLResponse)
+def archive_home():
+    # Canonical document archive route; keep /telegram only as a legacy alias.
     return (WEB/"index.html").read_text(encoding="utf-8")
 
 @app.get("/telegram",response_class=HTMLResponse)
 @app.get("/telegram/",response_class=HTMLResponse)
 def telegram_mini_app():
-    return (WEB/"telegram.html").read_text(encoding="utf-8")
+    # Compatibility URL: the document archive now has one canonical UI.
+    return (WEB/"index.html").read_text(encoding="utf-8")
 
 @app.get("/personal",response_class=HTMLResponse)
 @app.get("/personal/",response_class=HTMLResponse)
 def personal_assistant():
     return (WEB/"personal.html").read_text(encoding="utf-8")
 
+@app.get("/work",response_class=HTMLResponse)
+@app.get("/work/",response_class=HTMLResponse)
+def work_assistant():
+    return (WEB/"work.html").read_text(encoding="utf-8")
+
 PERSONAL_STATUSES={"inbox","today","scheduled","waiting","done","archived"}
 PERSONAL_TYPES={"task","reminder","payment","trip","note","email","document","call","appointment"}
 PERSONAL_CASE_STATUSES={"active","paused","done","archived"}
+CAPTURE_STATUSES={"captured","reviewed","confirmed","archived"}
+FACT_TYPES={"person","contact","account","document","preference","reference","decision","note"}
+FACT_STATUSES={"active","superseded","archived"}
 PERSONAL_TIMEZONE=timezone(timedelta(hours=3,minutes=30))
 
 def _personal_today():
@@ -668,6 +909,105 @@ def _get_personal_item(con,item_id):
 def _validate_personal_case(con,case_id):
     if case_id and not con.execute("SELECT 1 FROM personal_cases WHERE id=?",(case_id,)).fetchone():
         raise HTTPException(400,"Unknown personal case")
+
+def _capture_suggestion(text):
+    first=next((x.strip() for x in text.splitlines() if x.strip()),text).strip()[:240]
+    low=text.casefold()
+    if any(x in low for x in ("پرداخت","مهلت","قرار","تماس","جواب","پیگیری","یادآوری","ایمیل")):
+        return "task",first,{"item_type":"task","status":"inbox"}
+    if any(x in low for x in ("هستم","است","شماره","آدرس","حساب","ترجیح","تصمیم")):
+        return "fact",first,{"fact_type":"reference"}
+    return "note",first,{"item_type":"note","status":"inbox"}
+
+def _project_guess(con,text):
+    words=set(re.findall(r"[\w\u0600-\u06ff-]+",text.casefold()))
+    best=("",0)
+    for row in con.execute("SELECT id,title,aliases FROM personal_projects WHERE status='active'"):
+        terms=re.findall(r"[\w\u0600-\u06ff-]+",(row['title']+' '+row['aliases']).casefold())
+        score=sum(1 for term in terms if len(term)>1 and term in words)
+        if score>best[1]: best=(row['id'],score)
+    return (best[0],min(95,55+best[1]*15)) if best[1] else ("",0)
+
+@app.get('/api/personal/projects')
+def personal_projects(status:str='active'):
+    if status not in ('active','archived','all'): raise HTTPException(400,'Unknown project status')
+    with db() as con:
+        sql='SELECT * FROM personal_projects'+('' if status=='all' else ' WHERE status=?')+' ORDER BY updated_at DESC'
+        rows=list(con.execute(sql,() if status=='all' else (status,)))
+    return {'items':[dict(x) for x in rows]}
+
+@app.post('/api/personal/projects')
+def create_personal_project(payload:dict=Body(...)):
+    title=_clean_personal_text(payload.get('title'),160)
+    if not title: raise HTTPException(400,'Project title is required')
+    item={'id':str(uuid.uuid4()),'title':title,'aliases':_clean_personal_text(payload.get('aliases'),600),'notes':_clean_personal_text(payload.get('notes'),2000),'status':'active','created_at':now(),'updated_at':now()}
+    with db() as con:
+        try:
+            con.execute('INSERT INTO personal_projects(id,title,aliases,notes,status,created_at,updated_at) VALUES(:id,:title,:aliases,:notes,:status,:created_at,:updated_at)',item)
+            con.execute('UPDATE personal_projects SET goal=?,next_action=?,due_date=?,color=?,priority=? WHERE id=?',(_clean_personal_text(payload.get('goal'),1000),_clean_personal_text(payload.get('next_action'),500),_clean_personal_datetime(payload.get('due_date'))[:10],_clean_personal_text(payload.get('color') or '#5b6ff7',20),max(1,min(int(payload.get('priority',2) or 2),3)),item['id']))
+        except sqlite3.IntegrityError: raise HTTPException(409,'This project already exists')
+        item=dict(con.execute('SELECT * FROM personal_projects WHERE id=?',(item['id'],)).fetchone())
+    return {'ok':True,'item':item}
+
+@app.patch('/api/personal/projects/{project_id}')
+def update_personal_project(project_id:str,payload:dict=Body(...)):
+    with db() as con:
+        row=con.execute('SELECT * FROM personal_projects WHERE id=?',(project_id,)).fetchone()
+        if not row: raise HTTPException(404)
+        values=dict(row)
+        for key,limit in (('title',160),('aliases',600),('notes',2000),('status',20),('goal',1000),('next_action',500),('due_date',40),('color',20)):
+            if key in payload: values[key]=_clean_personal_text(payload[key],limit)
+        if 'priority' in payload: values['priority']=max(1,min(int(payload.get('priority') or 2),3))
+        if values['status'] not in ('active','archived') or not values['title']: raise HTTPException(400,'Invalid project')
+        values['updated_at']=now()
+        con.execute('UPDATE personal_projects SET title=?,aliases=?,notes=?,status=?,goal=?,next_action=?,due_date=?,color=?,priority=?,updated_at=? WHERE id=?',(values['title'],values['aliases'],values['notes'],values['status'],values.get('goal',''),values.get('next_action',''),values.get('due_date',''),values.get('color','#5b6ff7'),values.get('priority',2),values['updated_at'],project_id))
+    return {'ok':True,'item':values}
+
+def _capture_dict(row):
+    data=dict(row)
+    try:data["suggested_data"]=json.loads(data.get("suggested_data") or "{}")
+    except Exception:data["suggested_data"]={}
+    return data
+
+def _fact_dict(row):
+    return dict(row)
+
+def _fact_fingerprint(fact_type,label,value):
+    normalized="|".join(_clean_personal_text(x,500).casefold() for x in (fact_type,label,value))
+    return hashlib.sha256(normalized.encode()).hexdigest()
+
+def _ensure_safe_fact(label,value,details=""):
+    text=" ".join((label,value,details)).casefold()
+    if any(x in text for x in ("password","رمز عبور","رمز یکبار","otp","api key","secret key","توکن")):
+        raise HTTPException(400,"رمز و توکن را به Fact اضافه نکن")
+
+def _personal_event(con,subject_type,subject_id,action,details=''):
+    con.execute('INSERT INTO personal_events(id,subject_type,subject_id,action,details,created_at) VALUES(?,?,?,?,?,?)',(str(uuid.uuid4()),subject_type,subject_id,action,_clean_personal_text(details,2000),now()))
+
+def _personal_link(con,source_type,source_id,target_type,target_id,relation='related',confidence=100,source='manual'):
+    if target_id: con.execute('INSERT OR IGNORE INTO personal_links(id,source_type,source_id,target_type,target_id,relation,confidence,source,created_at) VALUES(?,?,?,?,?,?,?,?,?)',(str(uuid.uuid4()),source_type,source_id,target_type,target_id,relation,max(0,min(int(confidence),100)),source,now()))
+
+@app.post('/api/personal/links')
+def create_personal_link(payload:dict=Body(...)):
+    source_type=_clean_personal_text(payload.get('source_type'),40);source_id=_clean_personal_text(payload.get('source_id'),80)
+    target_type=_clean_personal_text(payload.get('target_type'),40);target_id=_clean_personal_text(payload.get('target_id'),80)
+    if not all((source_type,source_id,target_type,target_id)): raise HTTPException(400,'Link endpoints are required')
+    with db() as con:_personal_link(con,source_type,source_id,target_type,target_id,_clean_personal_text(payload.get('relation') or 'related',40),payload.get('confidence',100),'manual')
+    return {'ok':True}
+
+@app.get('/api/personal/projects/{project_id}/overview')
+def personal_project_overview(project_id:str):
+    with db() as con:
+        project=con.execute('SELECT * FROM personal_projects WHERE id=?',(project_id,)).fetchone()
+        if not project: raise HTTPException(404)
+        captures=[_capture_dict(x) for x in con.execute("SELECT * FROM personal_captures WHERE project_id=? AND status='captured' ORDER BY created_at DESC",(project_id,))]
+        facts=[_fact_dict(x) for x in con.execute("SELECT * FROM personal_facts WHERE project_id=? AND status='active' ORDER BY updated_at DESC",(project_id,))]
+        items=[dict(x) for x in con.execute("SELECT * FROM personal_items WHERE project_id=? AND status NOT IN ('done','archived') ORDER BY due_at,updated_at DESC",(project_id,))]
+        commitments=[dict(x) for x in con.execute("SELECT * FROM personal_commitments WHERE project_id=? ORDER BY updated_at DESC",(project_id,))]
+        decisions=[dict(x) for x in con.execute("SELECT * FROM personal_decisions WHERE project_id=? ORDER BY updated_at DESC",(project_id,))]
+        calendar=[dict(x) for x in con.execute("SELECT * FROM personal_calendar WHERE project_id=? ORDER BY starts_at",(project_id,))]
+        events=[dict(x) for x in con.execute('SELECT * FROM personal_events WHERE subject_type=? AND subject_id=? ORDER BY created_at DESC LIMIT 100',('project',project_id))]
+    return {'project':dict(project),'captures':captures,'facts':facts,'items':items,'commitments':commitments,'decisions':decisions,'calendar':calendar,'events':events}
 
 @app.get("/api/personal/dashboard")
 def personal_dashboard():
@@ -732,16 +1072,19 @@ def create_personal_item(payload:dict=Body(...)):
     amount=payload.get("amount")
     try:amount=float(amount) if amount not in (None,"") else None
     except (TypeError,ValueError):raise HTTPException(400,"Invalid amount")
-    item_id=str(uuid.uuid4());stamp=now()
+    project_id=_clean_personal_text(payload.get('project_id'),80);item_id=str(uuid.uuid4());stamp=now()
     with db() as con:
         _validate_personal_case(con,case_id)
-        con.execute("""INSERT INTO personal_items(id,item_type,title,details,status,priority,due_at,follow_up_at,repeat_rule,case_id,document_id,source,amount,currency,metadata,completed_at,created_at,updated_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(
+        if project_id and not con.execute("SELECT 1 FROM personal_projects WHERE id=?",(project_id,)).fetchone():raise HTTPException(400,'Unknown project')
+        con.execute("""INSERT INTO personal_items(id,item_type,title,details,status,priority,due_at,follow_up_at,repeat_rule,case_id,project_id,document_id,source,amount,currency,metadata,completed_at,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(
             item_id,item_type,title,_clean_personal_text(payload.get("details")),status,priority,due_at,follow_up_at,
-            _clean_personal_text(payload.get("repeat_rule"),100),case_id,_clean_personal_text(payload.get("document_id"),80),
+            _clean_personal_text(payload.get("repeat_rule"),100),case_id,project_id,_clean_personal_text(payload.get("document_id"),80),
             _clean_personal_text(payload.get("source") or "manual",50),amount,_clean_personal_text(payload.get("currency"),12),
             json.dumps(payload.get("metadata") if isinstance(payload.get("metadata"),dict) else {},ensure_ascii=False),
             stamp if status=="done" else "",stamp,stamp))
+        _personal_event(con,'item',item_id,'created',title)
+        if project_id:_personal_link(con,'item',item_id,'project',project_id,'belongs_to')
         row=_get_personal_item(con,item_id)
     return {"ok":True,"item":_personal_item(row)}
 
@@ -749,14 +1092,156 @@ def create_personal_item(payload:dict=Body(...)):
 def capture_personal_item(payload:dict=Body(...)):
     text=_clean_personal_text(payload.get("text"),4000)
     if not text:raise HTTPException(400,"Text is required")
-    lines=[x.strip() for x in text.splitlines() if x.strip()]
-    item_type=_clean_personal_text(payload.get("item_type") or "note",30)
-    if item_type not in PERSONAL_TYPES:item_type="note"
-    return create_personal_item({"title":lines[0][:240],"details":"\n".join(lines[1:]),"item_type":item_type,"status":"inbox","source":"quick_capture"})
+    normalized=" ".join(text.casefold().split())
+    digest=hashlib.sha256(normalized.encode()).hexdigest()
+    suggested_type,title,suggested_data=_capture_suggestion(text)
+    stamp=now();capture_id=str(uuid.uuid4());requested_project=_clean_personal_text(payload.get('project_id'),80)
+    with db() as con:
+        existing=con.execute("SELECT * FROM personal_captures WHERE normalized_hash=?",(digest,)).fetchone()
+        if existing:return {"ok":True,"duplicate":True,"capture":_capture_dict(existing)}
+        if requested_project and not con.execute("SELECT 1 FROM personal_projects WHERE id=? AND status='active'",(requested_project,)).fetchone(): raise HTTPException(400,'Unknown project')
+        guessed,confidence=_project_guess(con,text)
+        project_id=requested_project or guessed
+        con.execute("""INSERT INTO personal_captures(id,raw_text,normalized_hash,source,status,suggested_type,suggested_title,suggested_data,project_id,suggested_project_id,project_confidence,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",(capture_id,text,digest,_clean_personal_text(payload.get("source") or "quick_capture",50),"captured",suggested_type,title,json.dumps(suggested_data,ensure_ascii=False),project_id,guessed,confidence,stamp,stamp))
+        row=con.execute("SELECT * FROM personal_captures WHERE id=?",(capture_id,)).fetchone()
+    personal_v2_analyze(capture_id)
+    return {"ok":True,"duplicate":False,"capture":_capture_dict(row)}
+
+@app.get("/api/personal/captures")
+def personal_captures(status:str="captured",limit:int=100):
+    if status and status not in CAPTURE_STATUSES:raise HTTPException(400,"Unknown capture status")
+    limit=max(1,min(limit,500))
+    with db() as con:
+        sql="SELECT * FROM personal_captures"+(" WHERE status=?" if status else "")+" ORDER BY created_at DESC LIMIT ?"
+        rows=list(con.execute(sql,([status] if status else [])+[limit]))
+    return {"items":[_capture_dict(x) for x in rows],"count":len(rows)}
+
+@app.post("/api/personal/captures/{capture_id}/confirm")
+def confirm_capture(capture_id:str,payload:dict=Body(...)):
+    action=_clean_personal_text(payload.get("action"),30)
+    if action not in ("task","fact","archive"):raise HTTPException(400,"Choose task, fact, or archive")
+    with db() as con:
+        capture=con.execute("SELECT * FROM personal_captures WHERE id=?",(capture_id,)).fetchone()
+        if not capture:raise HTTPException(404,"Capture not found")
+        if capture["status"]=="confirmed":
+            return {"ok":True,"duplicate":True,"item_id":capture["confirmed_item_id"],"fact_id":capture["confirmed_fact_id"]}
+        if capture["status"]=="archived":raise HTTPException(409,"Capture is archived")
+        if action=="archive":
+            con.execute("UPDATE personal_captures SET status='archived',updated_at=?,confirmed_at=? WHERE id=?",(now(),now(),capture_id))
+            return {"ok":True,"archived":True}
+    if action=="task":
+        item_payload=dict(payload.get("item") or {})
+        item_payload.setdefault("title",capture["suggested_title"] or capture["raw_text"][:240])
+        item_payload.setdefault("details",capture["raw_text"])
+        item_payload.setdefault("item_type","task")
+        item_payload.setdefault("status","inbox")
+        item_payload.setdefault("project_id",capture["project_id"])
+        item_payload["source"]="capture_confirmed"
+        item=create_personal_item(item_payload)["item"]
+        with db() as con:
+            con.execute("UPDATE personal_captures SET status='confirmed',confirmed_item_id=?,updated_at=?,confirmed_at=? WHERE id=?",(item["id"],now(),now(),capture_id));_personal_link(con,'capture',capture_id,'item',item['id'],'converted_to');_personal_event(con,'capture',capture_id,'confirmed_task',item['title'])
+        return {"ok":True,"item":item}
+    fact_payload=dict(payload.get("fact") or {})
+    fact_payload.setdefault("label",capture["suggested_title"] or capture["raw_text"][:240])
+    fact_payload.setdefault("value",capture["raw_text"])
+    fact_payload.setdefault("fact_type","reference")
+    fact_payload.setdefault("project_id",capture["project_id"])
+    fact_payload["source_capture_id"]=capture_id
+    result=create_personal_fact(fact_payload)
+    with db() as con:
+        con.execute("UPDATE personal_captures SET status='confirmed',confirmed_fact_id=?,updated_at=?,confirmed_at=? WHERE id=?",(result["fact"]["id"],now(),now(),capture_id))
+    return {"ok":True,**result}
+
+@app.post("/api/personal/captures/{capture_id}/archive")
+def archive_capture(capture_id:str):
+    with db() as con:
+        if not con.execute("SELECT 1 FROM personal_captures WHERE id=?",(capture_id,)).fetchone():raise HTTPException(404)
+        con.execute("UPDATE personal_captures SET status='archived',updated_at=? WHERE id=?",(now(),capture_id))
+    return {"ok":True}
+
+@app.get("/api/personal/facts")
+def personal_facts(status:str="active",fact_type:str="",q:str="",limit:int=200):
+    if status and status not in FACT_STATUSES:raise HTTPException(400,"Unknown fact status")
+    if fact_type and fact_type not in FACT_TYPES:raise HTTPException(400,"Unknown fact type")
+    where=["1=1"];args=[]
+    if status:where.append("status=?");args.append(status)
+    if fact_type:where.append("fact_type=?");args.append(fact_type)
+    if q.strip():
+        term=f"%{q.strip()}%";where.append("(label LIKE ? OR value LIKE ? OR details LIKE ?)");args.extend([term,term,term])
+    limit=max(1,min(limit,500))
+    with db() as con:rows=list(con.execute("SELECT * FROM personal_facts WHERE "+" AND ".join(where)+" ORDER BY updated_at DESC LIMIT ?",[*args,limit]))
+    return {"items":[_fact_dict(x) for x in rows],"count":len(rows)}
+
+@app.post("/api/personal/facts")
+def create_personal_fact(payload:dict=Body(...)):
+    fact_type=_clean_personal_text(payload.get("fact_type") or "reference",40)
+    label=_clean_personal_text(payload.get("label"),240);value=_clean_personal_text(payload.get("value"),4000)
+    if fact_type not in FACT_TYPES:raise HTTPException(400,"Unknown fact type")
+    if not label or not value:raise HTTPException(400,"Fact label and value are required")
+    details=_clean_personal_text(payload.get("details"));_ensure_safe_fact(label,value,details)
+    case_id=_clean_personal_text(payload.get("case_id"),80);entity_id=_clean_personal_text(payload.get("entity_id"),80);project_id=_clean_personal_text(payload.get('project_id'),80)
+    fingerprint=_fact_fingerprint(fact_type,label,value);fact_id=str(uuid.uuid4());stamp=now()
+    with db() as con:
+        _validate_personal_case(con,case_id)
+        if project_id and not con.execute('SELECT 1 FROM personal_projects WHERE id=?',(project_id,)).fetchone():raise HTTPException(400,'Unknown project')
+        existing=con.execute("SELECT * FROM personal_facts WHERE fingerprint=?",(fingerprint,)).fetchone()
+        if existing:return {"ok":True,"duplicate":True,"fact":_fact_dict(existing)}
+        con.execute("""INSERT INTO personal_facts(id,fact_type,label,value,details,status,confidence,case_id,entity_id,project_id,source_capture_id,fingerprint,created_at,updated_at)
+            VALUES(?,?,?,?,?,'active','confirmed',?,?,?,?,?,?,?)""",(fact_id,fact_type,label,value,details,case_id,entity_id,project_id,_clean_personal_text(payload.get("source_capture_id"),80),fingerprint,stamp,stamp))
+        row=con.execute("SELECT * FROM personal_facts WHERE id=?",(fact_id,)).fetchone()
+        con.execute("INSERT INTO personal_fact_events(id,fact_id,action,snapshot,created_at) VALUES(?,?,?,?,?)",(str(uuid.uuid4()),fact_id,"created",json.dumps(dict(row),ensure_ascii=False),stamp))
+    return {"ok":True,"duplicate":False,"fact":_fact_dict(row)}
+
+@app.get("/api/personal/facts/{fact_id}")
+def personal_fact(fact_id:str):
+    with db() as con:
+        row=con.execute("SELECT * FROM personal_facts WHERE id=?",(fact_id,)).fetchone()
+        if not row:raise HTTPException(404)
+        history=[dict(x) for x in con.execute("SELECT action,snapshot,created_at FROM personal_fact_events WHERE fact_id=? ORDER BY created_at DESC",(fact_id,))]
+    for event in history:
+        try:event["snapshot"]=json.loads(event["snapshot"])
+        except Exception:pass
+    return {"fact":_fact_dict(row),"history":history}
+
+@app.patch("/api/personal/facts/{fact_id}")
+def update_personal_fact(fact_id:str,payload:dict=Body(...)):
+    allowed={"fact_type","label","value","details","status","case_id","entity_id","project_id"}
+    with db() as con:
+        current=con.execute("SELECT * FROM personal_facts WHERE id=?",(fact_id,)).fetchone()
+        if not current:raise HTTPException(404)
+        values=dict(current)
+        for key,value in payload.items():
+            if key not in allowed:continue
+            if key=="fact_type":
+                value=_clean_personal_text(value,40)
+                if value not in FACT_TYPES:raise HTTPException(400,"Unknown fact type")
+            elif key=="status":
+                value=_clean_personal_text(value,30)
+                if value not in FACT_STATUSES:raise HTTPException(400,"Unknown fact status")
+            elif key in ("label","value","details"):value=_clean_personal_text(value,4000 if key!="label" else 240)
+            elif key=="case_id":value=_clean_personal_text(value,80);_validate_personal_case(con,value)
+            elif key=="project_id":
+                value=_clean_personal_text(value,80)
+                if value and not con.execute('SELECT 1 FROM personal_projects WHERE id=?',(value,)).fetchone():raise HTTPException(400,'Unknown project')
+            else:value=_clean_personal_text(value,80)
+            values[key]=value
+        if not values["label"] or not values["value"]:raise HTTPException(400,"Fact label and value are required")
+        _ensure_safe_fact(values["label"],values["value"],values["details"])
+        new_fingerprint=_fact_fingerprint(values["fact_type"],values["label"],values["value"])
+        match=con.execute("SELECT id FROM personal_facts WHERE fingerprint=? AND id<>?",(new_fingerprint,fact_id)).fetchone()
+        if match:raise HTTPException(409,"This fact already exists")
+        values["fingerprint"]=new_fingerprint;values["updated_at"]=now()
+        if values["status"]=="archived" and current["status"]!="archived":values["archived_at"]=now()
+        con.execute("""UPDATE personal_facts SET fact_type=?,label=?,value=?,details=?,status=?,case_id=?,entity_id=?,project_id=?,fingerprint=?,updated_at=?,archived_at=? WHERE id=?""",(
+            values["fact_type"],values["label"],values["value"],values["details"],values["status"],values["case_id"],values["entity_id"],values.get("project_id",''),values["fingerprint"],values["updated_at"],values["archived_at"],fact_id))
+        fresh=con.execute("SELECT * FROM personal_facts WHERE id=?",(fact_id,)).fetchone()
+        con.execute("INSERT INTO personal_fact_events(id,fact_id,action,snapshot,created_at) VALUES(?,?,?,?,?)",(str(uuid.uuid4()),fact_id,"updated",json.dumps(dict(fresh),ensure_ascii=False),now()))
+    return {"ok":True,"fact":_fact_dict(fresh)}
 
 @app.patch("/api/personal/items/{item_id}")
 def update_personal_item(item_id:str,payload:dict=Body(...)):
-    allowed={"item_type","title","details","status","priority","due_at","follow_up_at","repeat_rule","case_id","document_id","source","amount","currency","metadata"}
+    allowed={"item_type","title","details","status","priority","due_at","follow_up_at","repeat_rule","case_id","project_id","document_id","source","amount","currency","metadata"}
     updates=[];args=[]
     with db() as con:
         current=_get_personal_item(con,item_id)
@@ -777,6 +1262,9 @@ def update_personal_item(item_id:str,payload:dict=Body(...)):
             elif key in ("due_at","follow_up_at"):value=_clean_personal_datetime(value)
             elif key=="case_id":
                 value=_clean_personal_text(value,80);_validate_personal_case(con,value)
+            elif key=="project_id":
+                value=_clean_personal_text(value,80)
+                if value and not con.execute('SELECT 1 FROM personal_projects WHERE id=?',(value,)).fetchone():raise HTTPException(400,'Unknown project')
             elif key=="amount":
                 try:value=float(value) if value not in (None,"") else None
                 except (TypeError,ValueError):raise HTTPException(400,"Invalid amount")
@@ -867,8 +1355,13 @@ def personal_search(q:str=""):
     with db() as con:
         tasks=[dict(x) for x in con.execute("SELECT id,title,details,status,item_type,updated_at FROM personal_items WHERE title LIKE ? OR details LIKE ? ORDER BY updated_at DESC LIMIT 20",(term,term))]
         cases=[dict(x) for x in con.execute("SELECT id,title,notes,status,'case' AS item_type,updated_at FROM personal_cases WHERE title LIKE ? OR notes LIKE ? ORDER BY updated_at DESC LIMIT 10",(term,term))]
+        facts=[dict(x) for x in con.execute("SELECT id,label AS title,value||CASE WHEN details<>'' THEN ' · '||details ELSE '' END AS details,status,'fact' AS item_type,updated_at FROM personal_facts WHERE status='active' AND (label LIKE ? OR value LIKE ? OR details LIKE ?) ORDER BY updated_at DESC LIMIT 20",(term,term,term))]
         docs=[dict(x) for x in con.execute("SELECT id,title,original_name AS details,'document' AS status,'document' AS item_type,updated_at FROM documents WHERE deleted=0 AND (title LIKE ? OR original_name LIKE ? OR notes LIKE ?) ORDER BY updated_at DESC LIMIT 20",(term,term,term))]
-    return {"items":[*tasks,*cases,*docs]}
+        captures=[dict(x) for x in con.execute("SELECT id,suggested_title AS title,raw_text AS details,status,'capture' AS item_type,updated_at FROM personal_captures WHERE raw_text LIKE ? ORDER BY updated_at DESC LIMIT 20",(term,))]
+        commitments=[dict(x) for x in con.execute("SELECT id,title,details,status,'commitment' AS item_type,updated_at FROM personal_commitments WHERE title LIKE ? OR details LIKE ? ORDER BY updated_at DESC LIMIT 20",(term,term))]
+        decisions=[dict(x) for x in con.execute("SELECT id,title,decision AS details,status,'decision' AS item_type,updated_at FROM personal_decisions WHERE title LIKE ? OR decision LIKE ? OR reason LIKE ? ORDER BY updated_at DESC LIMIT 20",(term,term,term))]
+        people=[dict(x) for x in con.execute("SELECT id,name AS title,notes AS details,'active' AS status,'person' AS item_type,updated_at FROM entities WHERE kind='person' AND (name LIKE ? OR notes LIKE ?) ORDER BY updated_at DESC LIMIT 20",(term,term))]
+    return {"items":[*tasks,*cases,*facts,*captures,*commitments,*decisions,*people,*docs]}
 
 @app.get("/api/stats")
 def stats():
@@ -941,7 +1434,7 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope
             where.append("(title LIKE ? OR original_name LIKE ? OR ocr_text LIKE ? OR tags LIKE ? OR notes LIKE ? OR entity_id IN (SELECT id FROM entities WHERE name LIKE ?))")
             args.extend([x,x,x,x,x,x])
     order={"newest":"created_at DESC","oldest":"created_at ASC","name":"title COLLATE NOCASE ASC","size":"size DESC"}.get(sort,"created_at DESC")
-    sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text,smart_filename,document_type,country,entity_id,issue_date,expiry_date,version_no,
+    sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text,smart_filename,document_type,country,entity_id,issue_date,expiry_date,version_no,project_id,action_status,follow_up_at,
             coalesce((SELECT name FROM entities e WHERE e.id=documents.entity_id),'') AS entity_name
             FROM documents WHERE {' AND '.join(where)} ORDER BY {order} LIMIT 500"""
     with db() as con:
@@ -982,7 +1475,7 @@ def drive_upload(file:UploadFile=File(...),x_drive_token:str|None=Header(None,al
 
 @app.patch("/api/documents/{did}")
 def update_document(did:str,payload:dict=Body(...)):
-    allowed={"title","category","tags","notes","favorite","filename","smart_filename","entity_id","document_type","country","issue_date","expiry_date"}
+    allowed={"title","category","tags","notes","favorite","filename","smart_filename","entity_id","document_type","country","issue_date","expiry_date","project_id","action_status","follow_up_at"}
     updates=[];args=[]
     with db() as con:
         current=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
@@ -1000,6 +1493,9 @@ def update_document(did:str,payload:dict=Body(...)):
         if k in ("issue_date","expiry_date"):
             v=str(v or "").strip()
             if v and not re.fullmatch(r"\d{4}-\d{2}-\d{2}",v):raise HTTPException(400,"Date must use YYYY-MM-DD")
+        if k=="action_status" and str(v or "none") not in ("none","review","waiting","done"):
+            raise HTTPException(400,"Invalid document action status")
+        if k=="follow_up_at": v=_clean_personal_datetime(v)
         if k=="smart_filename":
             requested=clean_filename(str(v or "").strip())
             original_ext=Path(current["original_name"]).suffix
@@ -1025,6 +1521,46 @@ def update_document(did:str,payload:dict=Body(...)):
         fts_upsert(con,row)
     audit("document_updated",did,"web",",".join(updates))
     return {"ok":True,"item":dict(row)}
+
+@app.get("/api/documents/dashboard")
+def document_dashboard():
+    today=datetime.now(timezone.utc).date()
+    warning=(today+timedelta(days=30)).isoformat()
+    with db() as con:
+        counts={
+            "total":con.execute("SELECT count(*) FROM documents WHERE deleted=0").fetchone()[0],
+            "review":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND (ocr_status IN ('pending','processing') OR action_status='review')").fetchone()[0],
+            "waiting":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND action_status='waiting'").fetchone()[0],
+            "expiring":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND expiry_date>=? AND expiry_date<=?",(today.isoformat(),warning)).fetchone()[0],
+            "expired":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND expiry_date<>'' AND expiry_date<?",(today.isoformat(),)).fetchone()[0],
+            "uncategorized":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND category='other'").fetchone()[0],
+        }
+        recent=[dict(r) for r in con.execute("SELECT id,title,document_type,expiry_date,action_status,ocr_status,created_at FROM documents WHERE deleted=0 ORDER BY created_at DESC LIMIT 8")]
+        attention=[dict(r) for r in con.execute("SELECT id,title,document_type,expiry_date,action_status,ocr_status,follow_up_at FROM documents WHERE deleted=0 AND (action_status IN ('review','waiting') OR ocr_status IN ('pending','failed') OR (expiry_date<>'' AND expiry_date<=?)) ORDER BY CASE WHEN expiry_date<>'' THEN expiry_date ELSE follow_up_at END LIMIT 20",(warning,))]
+    return {"counts":counts,"recent":recent,"attention":attention}
+
+@app.post("/api/documents/{did}/personal-action")
+def document_personal_action(did:str,payload:dict=Body(...)):
+    kind=str(payload.get("kind") or "task").strip().lower()
+    if kind not in ("task","fact"): raise HTTPException(400,"kind must be task or fact")
+    with db() as con: row=con.execute("SELECT * FROM documents WHERE id=? AND deleted=0",(did,)).fetchone()
+    if not row: raise HTTPException(404,"Document not found")
+    title=_clean_personal_text(payload.get("title") or row["title"],240)
+    details=_clean_personal_text(payload.get("details") or row["notes"] or row["ocr_text"][:3000],4000)
+    project_id=_clean_personal_text(payload.get("project_id") or row["project_id"],80)
+    if kind=="task":
+        item=create_personal_item({"title":title,"details":details,"item_type":"document","status":"inbox","due_at":_clean_personal_datetime(payload.get("due_at")),"project_id":project_id,"document_id":did,"source":"document"})["item"]
+        with db() as con:
+            con.execute("UPDATE documents SET action_status='waiting',follow_up_at=?,updated_at=? WHERE id=?",(_clean_personal_datetime(payload.get("follow_up_at")),now(),did))
+            _personal_link(con,"document",did,"item",item["id"],"action_from_document",100,"document")
+        audit("document_task_created",did,"web",item["id"])
+        return {"ok":True,"kind":"task","item":item}
+    fact=create_personal_fact({"fact_type":payload.get("fact_type") or "document","label":title,"value":details,"details":details,"project_id":project_id,"source_capture_id":"document:"+did})["fact"]
+    with db() as con:
+        con.execute("UPDATE documents SET action_status='done',updated_at=? WHERE id=?",(now(),did))
+        _personal_link(con,"document",did,"fact",fact["id"],"fact_from_document",100,"document")
+    audit("document_fact_created",did,"web",fact["id"])
+    return {"ok":True,"kind":"fact","fact":fact}
 
 @app.post("/api/documents/{did}/apply-suggestion")
 def apply_suggestion(did:str):
@@ -1647,4 +2183,6 @@ def version_file(did:str,vid:str,download:int=0):
 
 # Loaded after route definitions so integrations reuse the existing item API.
 from personal_integrations import install as install_personal_integrations
-personal_start, personal_stop = install_personal_integrations(app,ROOT,WEB,db,create_personal_item)
+personal_start, personal_stop = install_personal_integrations(app,ROOT,WEB,db,create_personal_item,capture_personal_item)
+from personal_assistant import install as install_personal_assistant
+personal_v2_start, personal_v2_analyze = install_personal_assistant(app,ROOT,db,capture_personal_item,create_personal_item,create_personal_fact,now)

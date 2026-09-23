@@ -6,3 +6,4 @@ pypdf==6.0.0
 python-magic==0.4.27
 pywebpush==2.0.3
 cryptography>=44.0.0,<47
+faster-whisper==1.2.1

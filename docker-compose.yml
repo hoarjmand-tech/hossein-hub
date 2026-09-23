@@ -12,6 +12,11 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:-}
       TELEGRAM_INIT_MAX_AGE: ${TELEGRAM_INIT_MAX_AGE:-86400}
+      WHISPER_CMD: ${WHISPER_CMD:-python /app/transcribe_cli.py}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WORK_AGENT_URL: ${WORK_AGENT_URL:-}
+      WORK_AGENT_TOKEN: ${WORK_AGENT_TOKEN:-}
+      WORK_ALLOWED_TASKS: ${WORK_ALLOWED_TASKS:-status,docker_status,docker_logs,disk_check,health,backup}
     secrets:
       - drive_push_token
     volumes:
