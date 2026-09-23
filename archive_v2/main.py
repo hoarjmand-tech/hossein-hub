@@ -1,6 +1,7 @@
 from document_analyzer import analyze_document
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import re
@@ -788,6 +789,16 @@ def work_overview():
 def work_devices():
     with db() as con:return {"items":[_work_device(r) for r in con.execute("SELECT * FROM work_devices ORDER BY site,name")]}
 
+@app.get("/api/work/events")
+def work_events(limit:int=50, severity:str=""):
+    limit=max(1,min(int(limit or 50),200))
+    with db() as con:
+        if severity in {"info","warning","error"}:
+            rows=con.execute("SELECT * FROM work_events WHERE severity=? ORDER BY id DESC LIMIT ?",(severity,limit)).fetchall()
+        else:
+            rows=con.execute("SELECT * FROM work_events ORDER BY id DESC LIMIT ?",(limit,)).fetchall()
+    return {"items":[dict(r) for r in rows]}
+
 @app.post("/api/work/devices")
 def work_add_device(payload:dict=Body(default={} )):
     name=str(payload.get("name") or "").strip()[:120]; address=str(payload.get("address") or "").strip()[:255]
@@ -799,6 +810,74 @@ def work_add_device(payload:dict=Body(default={} )):
         con.execute("INSERT INTO work_devices(id,name,kind,site,address,port,protocol,tags,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",(did,name,str(payload.get("kind") or "server"),str(payload.get("site") or "Tehran"),address,int(payload.get("port") or 0),protocol,str(payload.get("tags") or ""),now(),now()))
         row=con.execute("SELECT * FROM work_devices WHERE id=?",(did,)).fetchone()
     return {"device":_work_device(row)}
+
+@app.post("/api/work/bootstrap")
+def work_bootstrap():
+    """Add the known Hossein Hub infrastructure as editable inventory records.
+    Nothing is probed automatically; the operator explicitly starts checks."""
+    assets=[
+        ("DC-SRV","domain-controller","Tehran","192.168.1.1",0,"icmp","AD,DNS,DHCP"),
+        ("ADC-SRV","domain-controller","Tehran","192.168.1.2",0,"icmp","AD,DNS"),
+        ("FortiGate 70G","firewall","Tehran","192.168.1.10",443,"tcp","firewall,wan,vpn"),
+        ("WSUS-SRV","server","Tehran","192.168.1.24",8531,"tcp","windows,updates"),
+        ("MeshCentral","service","Tehran","192.168.1.30",443,"tcp","remote-access"),
+        ("Panasonic KX-TDE200","pbx","Tehran","192.168.1.223",80,"tcp","voip,pbx"),
+    ]
+    added=0
+    with db() as con:
+        for name,kind,site,address,port,protocol,tags in assets:
+            exists=con.execute("SELECT id FROM work_devices WHERE address=?",(address,)).fetchone()
+            if exists:continue
+            con.execute("INSERT INTO work_devices(id,name,kind,site,address,port,protocol,tags,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",(uuid.uuid4().hex,name,kind,site,address,port,protocol,tags,now(),now()))
+            added+=1
+    return {"added":added,"total":len(assets),"message":"دارایی‌های شناخته‌شده اضافه شدند؛ بررسی فقط با فرمان شما انجام می‌شود."}
+
+@app.patch("/api/work/devices/{device_id}")
+def work_update_device(device_id:str,payload:dict=Body(default={} )):
+    allowed={"name","kind","site","address","port","protocol","tags","enabled"}
+    updates={k:payload[k] for k in allowed if k in payload}
+    if "name" in updates and not str(updates["name"]).strip():raise HTTPException(400,"نام لازم است")
+    if "address" in updates and not str(updates["address"]).strip():raise HTTPException(400,"آدرس لازم است")
+    if "protocol" in updates and updates["protocol"] not in {"tcp","icmp","http","https"}:raise HTTPException(400,"پروتکل پشتیبانی نمی‌شود")
+    if not updates:raise HTTPException(400,"تغییری ارسال نشده است")
+    updates["updated_at"]=now()
+    with db() as con:
+        if not con.execute("SELECT 1 FROM work_devices WHERE id=?",(device_id,)).fetchone():raise HTTPException(404,"دستگاه پیدا نشد")
+        fields=", ".join(f"{k}=?" for k in updates)
+        con.execute(f"UPDATE work_devices SET {fields} WHERE id=?",(*updates.values(),device_id))
+        row=con.execute("SELECT * FROM work_devices WHERE id=?",(device_id,)).fetchone()
+    return {"device":_work_device(row)}
+
+@app.delete("/api/work/devices/{device_id}")
+def work_delete_device(device_id:str):
+    with db() as con:
+        if not con.execute("SELECT 1 FROM work_devices WHERE id=?",(device_id,)).fetchone():raise HTTPException(404,"دستگاه پیدا نشد")
+        con.execute("DELETE FROM work_devices WHERE id=?",(device_id,))
+        con.execute("UPDATE work_actions SET device_id='' WHERE device_id=?",(device_id,))
+    return {"ok":True}
+
+@app.post("/api/work/discover")
+def work_discover(payload:dict=Body(default={} )):
+    """Discover responsive hosts on an explicitly supplied private /24 or smaller network."""
+    cidr=str(payload.get("cidr") or "").strip()
+    port=int(payload.get("port") or 0)
+    try:network=ipaddress.ip_network(cidr,strict=False)
+    except ValueError:raise HTTPException(400,"شبکه را به شکل CIDR مثل 192.168.1.0/24 وارد کنید")
+    if not network.is_private or network.prefixlen<24:raise HTTPException(400,"برای ایمنی فقط شبکهٔ خصوصی با اندازهٔ /24 یا کوچک‌تر مجاز است")
+    hosts=list(network.hosts())
+    if len(hosts)>254:raise HTTPException(400,"تعداد میزبان‌ها بیش از حد مجاز است")
+    def probe(ip):
+        started=time.monotonic()
+        try:
+            if port:
+                with socket.create_connection((str(ip),port),timeout=.7):pass
+                return {"address":str(ip),"status":"up","port":port,"latency_ms":round((time.monotonic()-started)*1000,1)}
+            proc=subprocess.run(["ping","-c","1","-W","1",str(ip)],capture_output=True,timeout=1.5)
+            return {"address":str(ip),"status":"up" if proc.returncode==0 else "down","latency_ms":round((time.monotonic()-started)*1000,1)}
+        except Exception:return {"address":str(ip),"status":"down"}
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=32) as pool:results=list(pool.map(probe,hosts))
+    return {"cidr":str(network),"port":port,"found":[x for x in results if x["status"]=="up"],"scanned":len(hosts)}
 
 @app.post("/api/work/devices/{device_id}/check")
 def work_check_device(device_id:str):
