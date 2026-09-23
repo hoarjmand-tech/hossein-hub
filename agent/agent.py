@@ -21,6 +21,8 @@ ALLOWED = yaml.safe_load(
 )["allowed"]
 
 LOG = BASE / "agent.log"
+STATE = Path(os.getenv("HERMES_STATE_DIR", "/var/lib/hossein-agent/fortigate"))
+STATE.mkdir(parents=True, exist_ok=True)
 
 
 def log(msg):
@@ -28,6 +30,16 @@ def log(msg):
         f.write(
             f"{datetime.now()} {msg}\n"
         )
+
+
+def audit(task, parameters, result):
+    """Append a structured, secret-free audit record for every NetOps operation."""
+    record = {"at": datetime.utcnow().isoformat() + "Z", "task": task,
+              "parameters": parameters or {}, "code": result.get("code"),
+              "error": result.get("error", ""),
+              "ok": result.get("code", 1) == 0 and not result.get("error")}
+    with open(STATE / "audit.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def run(cmd):
@@ -90,7 +102,7 @@ def execute(task, parameters=None):
             "curl -s http://localhost:8080/health"
         )
 
-    if task in ("fortigate_status", "network_snapshot", "fortigate_report", "fortigate_change"):
+    if task in ("fortigate_status", "network_snapshot", "fortigate_report", "fortigate_backup", "fortigate_diff", "fortigate_rollback", "fortigate_change"):
         # Hermes/NetOps uses the existing Ansible SSH read-only workflow.
         # The agent never accepts an arbitrary command from the web UI.
         root = Path(os.getenv("NETOPS_ROOT", "/opt/ansible/netops"))
@@ -105,6 +117,12 @@ def execute(task, parameters=None):
             if operation not in {"set_dns", "set_hostname", "create_address", "disable_policy", "enable_policy"}:
                 return {"error": "عملیات تغییر FortiGate مجاز نیست"}
             candidates = [root / "playbooks/fortigate-change.yml", root / "playbooks/fortigate_change.yml"]
+        elif task == "fortigate_backup":
+            candidates = [root / "playbooks/fortigate-backup.yml", root / "playbooks/fortigate_backup.yml"]
+        elif task == "fortigate_diff":
+            candidates = [root / "playbooks/fortigate-diff.yml", root / "playbooks/fortigate_diff.yml"]
+        elif task == "fortigate_rollback":
+            candidates = [root / "playbooks/fortigate-rollback.yml", root / "playbooks/fortigate_rollback.yml"]
         else:
             candidates = [root / "playbooks/network-snapshot.yml", root / "playbooks/network_snapshot.yml", root / "playbooks/fortigate-ssh-check.yml"]
         playbook = next((p for p in candidates if p.is_file()), None)
@@ -117,8 +135,17 @@ def execute(task, parameters=None):
         if task == "fortigate_report":
             extra = " -e " + shlex.quote("report_kind=" + str(parameters.get("kind") or "status"))
         elif task == "fortigate_change":
+            backup_candidates = [root / "playbooks/fortigate-backup.yml", root / "playbooks/fortigate_backup.yml"]
+            backup = next((p for p in backup_candidates if p.is_file()), None)
+            if not backup:
+                return {"error": "برای تغییر، playbook پشتیبان‌گیری FortiGate وجود ندارد؛ عملیات متوقف شد"}
+            backup_result = run(f"cd {shlex.quote(str(root))} && ansible-playbook {shlex.quote(str(backup))} --vault-password-file {shlex.quote(vault_file)}")
+            if backup_result.get("code") != 0:
+                return {"error": "پشتیبان‌گیری قبل از تغییر ناموفق بود؛ تغییر اجرا نشد", "backup": backup_result}
             extra = " -e " + shlex.quote("operation=" + str(parameters.get("operation")))
             extra += " -e " + shlex.quote("values_json=" + json.dumps(parameters.get("values") or {}, ensure_ascii=False))
+        elif task in ("fortigate_diff", "fortigate_rollback"):
+            extra = " -e " + shlex.quote("snapshot_id=" + str(parameters.get("snapshot_id") or "latest"))
         cmd = f"cd {shlex.quote(str(root))} && ansible-playbook {shlex.quote(str(playbook))} --vault-password-file {shlex.quote(vault_file)}{extra}"
         return run(cmd)
 
@@ -162,6 +189,7 @@ class Handler(BaseHTTPRequestHandler):
         log(task)
 
         result = execute(task, parameters)
+        audit(task, parameters, result)
 
 
         self.send_response(200)
