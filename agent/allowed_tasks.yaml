@@ -7,3 +7,5 @@ allowed:
   - disk_check
   - fortigate_status
   - network_snapshot
+  - fortigate_report
+  - fortigate_change
