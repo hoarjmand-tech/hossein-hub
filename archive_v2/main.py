@@ -739,7 +739,7 @@ app=FastAPI(title="Hossein Archive",version="5.0",lifespan=lifespan)
 
 WORK_AGENT_URL=os.getenv("WORK_AGENT_URL","").strip().rstrip("/")
 WORK_AGENT_TOKEN=os.getenv("WORK_AGENT_TOKEN","").strip()
-WORK_ALLOWED_TASKS={x.strip() for x in os.getenv("WORK_ALLOWED_TASKS","status,docker_status,docker_logs,disk_check,health,backup,fortigate_status,network_snapshot,fortigate_report,fortigate_change").split(",") if x.strip()}
+WORK_ALLOWED_TASKS={x.strip() for x in os.getenv("WORK_ALLOWED_TASKS","status,docker_status,docker_logs,disk_check,health,backup,fortigate_status,network_snapshot,fortigate_report,fortigate_backup,fortigate_diff,fortigate_rollback,fortigate_change").split(",") if x.strip()}
 
 def _work_device(row):
     if not row:return None
