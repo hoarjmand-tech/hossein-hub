@@ -5,3 +5,5 @@ allowed:
   - docker_logs
   - backup
   - disk_check
+  - fortigate_status
+  - network_snapshot
