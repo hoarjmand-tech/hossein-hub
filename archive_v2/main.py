@@ -362,6 +362,9 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_work_actions_status ON work_actions(status,created_at DESC);
         """)
+        wa_cols={r["name"] for r in con.execute("PRAGMA table_info(work_actions)")}
+        if "parameters" not in wa_cols:
+            con.execute("ALTER TABLE work_actions ADD COLUMN parameters TEXT NOT NULL DEFAULT '{}'")
         ccols={r["name"] for r in con.execute("PRAGMA table_info(personal_captures)")}
         if "project_id" not in ccols: con.execute("ALTER TABLE personal_captures ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
         if "suggested_project_id" not in ccols: con.execute("ALTER TABLE personal_captures ADD COLUMN suggested_project_id TEXT NOT NULL DEFAULT ''")
@@ -736,7 +739,7 @@ app=FastAPI(title="Hossein Archive",version="5.0",lifespan=lifespan)
 
 WORK_AGENT_URL=os.getenv("WORK_AGENT_URL","").strip().rstrip("/")
 WORK_AGENT_TOKEN=os.getenv("WORK_AGENT_TOKEN","").strip()
-WORK_ALLOWED_TASKS={x.strip() for x in os.getenv("WORK_ALLOWED_TASKS","status,docker_status,docker_logs,disk_check,health,backup,fortigate_status,network_snapshot").split(",") if x.strip()}
+WORK_ALLOWED_TASKS={x.strip() for x in os.getenv("WORK_ALLOWED_TASKS","status,docker_status,docker_logs,disk_check,health,backup,fortigate_status,network_snapshot,fortigate_report,fortigate_change").split(",") if x.strip()}
 
 def _work_device(row):
     if not row:return None
@@ -768,11 +771,11 @@ def _work_probe(device):
     except Exception as exc:
         return {"status":"down","message":str(exc)[:240],"latency_ms":round((time.monotonic()-started)*1000,1)}
 
-def _work_agent(task):
+def _work_agent(task,parameters=None):
     if not WORK_AGENT_URL or not WORK_AGENT_TOKEN:return {"ok":False,"error":"WORK_AGENT_URL و WORK_AGENT_TOKEN تنظیم نشده‌اند"}
     if task not in WORK_ALLOWED_TASKS:return {"ok":False,"error":"این عملیات در فهرست مجاز نیست"}
     try:
-        req=URLRequest(WORK_AGENT_URL,headers={"Content-Type":"application/json","X-Agent-Token":WORK_AGENT_TOKEN},data=json.dumps({"task":task}).encode(),method="POST")
+        req=URLRequest(WORK_AGENT_URL,headers={"Content-Type":"application/json","X-Agent-Token":WORK_AGENT_TOKEN},data=json.dumps({"task":task,"parameters":parameters or {}}).encode(),method="POST")
         with urlopen(req,timeout=30) as resp:return {"ok":True,"result":json.loads(resp.read().decode("utf-8","replace"))}
     except Exception as exc:return {"ok":False,"error":str(exc)[:300]}
 
@@ -894,9 +897,30 @@ def work_check_device(device_id:str):
 def work_create_action(payload:dict=Body(default={} )):
     task=str(payload.get("task") or "").strip()
     if task not in WORK_ALLOWED_TASKS:raise HTTPException(400,"این عملیات در فهرست مجاز نیست")
+    parameters=payload.get("parameters") or {}
+    if not isinstance(parameters,dict):raise HTTPException(400,"پارامترهای عملیات نامعتبر است")
     aid=uuid.uuid4().hex
-    with db() as con:con.execute("INSERT INTO work_actions(id,device_id,task,created_at) VALUES(?,?,?,?)",(aid,str(payload.get("device_id") or ""),task,now()))
+    with db() as con:con.execute("INSERT INTO work_actions(id,device_id,task,parameters,created_at) VALUES(?,?,?,?,?)",(aid,str(payload.get("device_id") or ""),task,json.dumps(parameters,ensure_ascii=False),now()))
     return {"id":aid,"status":"pending","message":"برای اجرا نیازمند تأیید است"}
+
+@app.post("/api/work/fortigate/report")
+def fortigate_report(payload:dict=Body(default={} )):
+    kind=str(payload.get("kind") or "status").strip()
+    if kind not in {"status","interfaces","routes","policies","full"}:raise HTTPException(400,"نوع گزارش FortiGate مجاز نیست")
+    if "fortigate_report" not in WORK_ALLOWED_TASKS:raise HTTPException(503,"عملیات گزارش FortiGate فعال نشده است")
+    aid=uuid.uuid4().hex
+    with db() as con:con.execute("INSERT INTO work_actions(id,device_id,task,parameters,created_at) VALUES(?,?,?,?,?)",(aid,"","fortigate_report",json.dumps({"kind":kind},ensure_ascii=False),now()))
+    return {"id":aid,"status":"pending","message":"گزارش FortiGate در صف تأیید قرار گرفت"}
+
+@app.post("/api/work/fortigate/change")
+def fortigate_change(payload:dict=Body(default={} )):
+    operation=str(payload.get("operation") or "").strip()
+    allowed={"set_dns","set_hostname","create_address","disable_policy","enable_policy"}
+    if operation not in allowed:raise HTTPException(400,"این تغییر FortiGate در فهرست مجاز نیست")
+    aid=uuid.uuid4().hex
+    parameters={"operation":operation,"values":payload.get("values") or {}}
+    with db() as con:con.execute("INSERT INTO work_actions(id,device_id,task,parameters,created_at) VALUES(?,?,?,?,?)",(aid,"","fortigate_change",json.dumps(parameters,ensure_ascii=False),now()))
+    return {"id":aid,"status":"pending","message":"تغییر FortiGate فقط پس از تأیید اجرا می‌شود"}
 
 @app.post("/api/work/actions/{action_id}/approve")
 def work_approve_action(action_id:str):
@@ -904,7 +928,9 @@ def work_approve_action(action_id:str):
         row=con.execute("SELECT * FROM work_actions WHERE id=?",(action_id,)).fetchone()
         if not row:raise HTTPException(404,"درخواست پیدا نشد")
         if row["status"]!="pending":raise HTTPException(409,"این درخواست قبلاً پردازش شده")
-        result=_work_agent(row["task"]); status="done" if result.get("ok") else "failed"
+        try:parameters=json.loads(row["parameters"] or "{}")
+        except Exception:parameters={}
+        result=_work_agent(row["task"],parameters); status="done" if result.get("ok") else "failed"
         con.execute("UPDATE work_actions SET status=?,approved_at=?,completed_at=?,result=? WHERE id=?",(status,now(),now(),json.dumps(result,ensure_ascii=False),action_id))
     return {"id":action_id,"status":status,"result":result}
 
