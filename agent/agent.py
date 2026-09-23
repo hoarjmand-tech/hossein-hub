@@ -5,6 +5,7 @@ import subprocess
 import json
 import yaml
 import os
+import shlex
 from datetime import datetime
 from pathlib import Path
 
@@ -51,7 +52,8 @@ def run(cmd):
         }
 
 
-def execute(task):
+def execute(task, parameters=None):
+    parameters = parameters or {}
 
     if task == "status":
         return run(
@@ -88,7 +90,7 @@ def execute(task):
             "curl -s http://localhost:8080/health"
         )
 
-    if task in ("fortigate_status", "network_snapshot"):
+    if task in ("fortigate_status", "network_snapshot", "fortigate_report", "fortigate_change"):
         # Hermes/NetOps uses the existing Ansible SSH read-only workflow.
         # The agent never accepts an arbitrary command from the web UI.
         root = Path(os.getenv("NETOPS_ROOT", "/opt/ansible/netops"))
@@ -96,6 +98,13 @@ def execute(task):
             return {"error": f"NETOPS_ROOT not found: {root}"}
         if task == "fortigate_status":
             candidates = [root / "playbooks/fortigate-ssh-check.yml", root / "playbooks/fortigate_status.yml"]
+        elif task == "fortigate_report":
+            candidates = [root / "playbooks/fortigate-report.yml", root / "playbooks/fortigate_report.yml", root / "playbooks/fortigate-ssh-check.yml"]
+        elif task == "fortigate_change":
+            operation = str(parameters.get("operation") or "")
+            if operation not in {"set_dns", "set_hostname", "create_address", "disable_policy", "enable_policy"}:
+                return {"error": "عملیات تغییر FortiGate مجاز نیست"}
+            candidates = [root / "playbooks/fortigate-change.yml", root / "playbooks/fortigate_change.yml"]
         else:
             candidates = [root / "playbooks/network-snapshot.yml", root / "playbooks/network_snapshot.yml", root / "playbooks/fortigate-ssh-check.yml"]
         playbook = next((p for p in candidates if p.is_file()), None)
@@ -104,7 +113,13 @@ def execute(task):
         vault_file = os.getenv("ANSIBLE_VAULT_PASSWORD_FILE", str(root / ".vault_pass"))
         if not Path(vault_file).is_file():
             return {"error": "ANSIBLE_VAULT_PASSWORD_FILE تنظیم نشده یا فایل رمز Vault وجود ندارد"}
-        cmd = f"cd {root} && ansible-playbook {playbook} --vault-password-file {vault_file}"
+        extra = ""
+        if task == "fortigate_report":
+            extra = " -e " + shlex.quote("report_kind=" + str(parameters.get("kind") or "status"))
+        elif task == "fortigate_change":
+            extra = " -e " + shlex.quote("operation=" + str(parameters.get("operation")))
+            extra += " -e " + shlex.quote("values_json=" + json.dumps(parameters.get("values") or {}, ensure_ascii=False))
+        cmd = f"cd {shlex.quote(str(root))} && ansible-playbook {shlex.quote(str(playbook))} --vault-password-file {shlex.quote(vault_file)}{extra}"
         return run(cmd)
 
     return {
@@ -135,6 +150,7 @@ class Handler(BaseHTTPRequestHandler):
         data = json.loads(body)
 
         task = data.get("task")
+        parameters = data.get("parameters") or {}
 
 
         if task not in ALLOWED:
@@ -145,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
 
         log(task)
 
-        result = execute(task)
+        result = execute(task, parameters)
 
 
         self.send_response(200)
