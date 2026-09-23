@@ -9,3 +9,6 @@ allowed:
   - network_snapshot
   - fortigate_report
   - fortigate_change
+  - fortigate_backup
+  - fortigate_diff
+  - fortigate_rollback
