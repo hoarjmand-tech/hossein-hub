@@ -88,6 +88,25 @@ def execute(task):
             "curl -s http://localhost:8080/health"
         )
 
+    if task in ("fortigate_status", "network_snapshot"):
+        # Hermes/NetOps uses the existing Ansible SSH read-only workflow.
+        # The agent never accepts an arbitrary command from the web UI.
+        root = Path(os.getenv("NETOPS_ROOT", "/opt/ansible/netops"))
+        if not root.is_dir():
+            return {"error": f"NETOPS_ROOT not found: {root}"}
+        if task == "fortigate_status":
+            candidates = [root / "playbooks/fortigate-ssh-check.yml", root / "playbooks/fortigate_status.yml"]
+        else:
+            candidates = [root / "playbooks/network-snapshot.yml", root / "playbooks/network_snapshot.yml", root / "playbooks/fortigate-ssh-check.yml"]
+        playbook = next((p for p in candidates if p.is_file()), None)
+        if not playbook:
+            return {"error": "هیچ playbook مجاز NetOps برای این عملیات پیدا نشد"}
+        vault_file = os.getenv("ANSIBLE_VAULT_PASSWORD_FILE", str(root / ".vault_pass"))
+        if not Path(vault_file).is_file():
+            return {"error": "ANSIBLE_VAULT_PASSWORD_FILE تنظیم نشده یا فایل رمز Vault وجود ندارد"}
+        cmd = f"cd {root} && ansible-playbook {playbook} --vault-password-file {vault_file}"
+        return run(cmd)
+
     return {
         "error":"Unknown task"
     }
