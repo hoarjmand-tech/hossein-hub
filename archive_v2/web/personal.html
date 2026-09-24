@@ -10,7 +10,6 @@
 <link rel="manifest" href="/personal/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/personal/icon-192.png">
   <style>
-  @import url('https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/Vazirmatn-font-face.css');
   body{font-family:Vazirmatn,Tahoma,Arial,sans-serif}
     @font-face{font-family:Persian;src:url('/font-persian-regular.ttf')}@font-face{font-family:Persian;src:url('/font-persian-bold.ttf');font-weight:700}
     :root{--ink:#182033;--muted:#7a8297;--line:#e8eaf1;--paper:#fff;--bg:#f6f7fb;--blue:#5b6ff7;--violet:#8d5cf6;--coral:#ff7868;--green:#24b88b;--amber:#efa83b;--shadow:0 16px 44px rgba(37,45,80,.10)}
@@ -47,6 +46,11 @@
     body>nav.hub-nav{margin:0 auto 12px;width:min(760px,100%)}
     @media(max-width:430px){.app>.hub-nav{gap:6px;padding-left:12px;padding-right:12px}.app>.hub-nav a{font-size:9px;min-height:51px}.app>.section-nav{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:7px!important;margin-left:12px!important;margin-right:12px!important}.app>.section-nav .nav-btn{min-height:62px;font-size:9px}}
     @media(min-width:680px){.summary-grid{grid-template-columns:repeat(4,1fr)}.case-grid{grid-template-columns:repeat(3,1fr)}main{padding-left:22px;padding-right:22px}.fab{left:calc(50% - 350px)}}
+  </style>
+  <style>
+  @font-face{font-family:AppPersian;src:url('/font-persian-regular.ttf') format('truetype');font-weight:400;font-display:swap}
+  @font-face{font-family:AppPersian;src:url('/font-persian-bold.ttf') format('truetype');font-weight:700 900;font-display:swap}
+  html,body,button,input,select,textarea{font-family:AppPersian,Tahoma,Arial,sans-serif!important}
   </style>
 </head>
 <body>
