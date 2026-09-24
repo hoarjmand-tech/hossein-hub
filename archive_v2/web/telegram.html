@@ -51,6 +51,11 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}button{
 .loader{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--button);border-radius:50%;animation:spin .8s linear infinite;margin:70px auto}@keyframes spin{to{transform:rotate(360deg)}}
 .error{margin:25px 14px;padding:18px;background:var(--card);border:1px solid color-mix(in srgb,var(--danger) 35%,var(--line));border-radius:15px;text-align:center;line-height:1.9}.error b{color:var(--danger)}
 </style>
+<style>
+@font-face{font-family:AppPersian;src:url('/font-persian-regular.ttf') format('truetype');font-weight:400;font-display:swap}
+@font-face{font-family:AppPersian;src:url('/font-persian-bold.ttf') format('truetype');font-weight:700 900;font-display:swap}
+html,body,button,input,select,textarea{font-family:AppPersian,Tahoma,Arial,sans-serif!important}
+</style>
 </head>
 <body>
 <main id="app" class="app"><div class="loader"></div></main>
