@@ -1468,6 +1468,22 @@ def personal_search(q:str=""):
         people=[dict(x) for x in con.execute("SELECT id,name AS title,notes AS details,'active' AS status,'person' AS item_type,updated_at FROM entities WHERE kind='person' AND (name LIKE ? OR notes LIKE ?) ORDER BY updated_at DESC LIMIT 20",(term,term))]
     return {"items":[*tasks,*cases,*facts,*captures,*commitments,*decisions,*people,*docs]}
 
+@app.get("/api/home/search")
+def home_search(q:str=""):
+    """Unified, read-only search used by the home dashboard."""
+    q=q.strip()
+    if len(q)<2:return {"items":[]}
+    term=f"%{q}%"
+    with db() as con:
+        rows=[]
+        rows += [dict(x) for x in con.execute("SELECT id,title,details,status,'task' AS item_type,updated_at FROM personal_items WHERE title LIKE ? OR details LIKE ? ORDER BY updated_at DESC LIMIT 12",(term,term))]
+        rows += [dict(x) for x in con.execute("SELECT id,title,notes AS details,status,'project' AS item_type,updated_at FROM personal_projects WHERE title LIKE ? OR aliases LIKE ? OR notes LIKE ? ORDER BY updated_at DESC LIMIT 10",(term,term,term))]
+        rows += [dict(x) for x in con.execute("SELECT id,label AS title,value||CASE WHEN details<>'' THEN ' · '||details ELSE '' END AS details,status,'fact' AS item_type,updated_at FROM personal_facts WHERE status='active' AND (label LIKE ? OR value LIKE ? OR details LIKE ?) ORDER BY updated_at DESC LIMIT 12",(term,term,term))]
+        rows += [dict(x) for x in con.execute("SELECT id,suggested_title AS title,raw_text AS details,status,'capture' AS item_type,updated_at FROM personal_captures WHERE raw_text LIKE ? OR suggested_title LIKE ? ORDER BY updated_at DESC LIMIT 12",(term,term))]
+        rows += [dict(x) for x in con.execute("SELECT id,title,original_name AS details,'active' AS status,'document' AS item_type,updated_at FROM documents WHERE deleted=0 AND (title LIKE ? OR original_name LIKE ? OR notes LIKE ?) ORDER BY updated_at DESC LIMIT 12",(term,term,term))]
+        rows += [dict(x) for x in con.execute("SELECT id,title,details,status,'email' AS item_type,updated_at FROM personal_items WHERE item_type='email' AND (title LIKE ? OR details LIKE ?) ORDER BY updated_at DESC LIMIT 12",(term,term))]
+    return {"items":rows[:50]}
+
 @app.get("/api/stats")
 def stats():
     today=datetime.now(timezone.utc).date().isoformat()
