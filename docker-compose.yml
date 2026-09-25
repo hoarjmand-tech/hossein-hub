@@ -6,6 +6,7 @@ services:
     environment:
       ARCHIVE_ROOT: /data
       DRIVE_PUSH_TOKEN_FILE: /run/secrets/drive_push_token
+      DRIVE_BROWSER_URL: ${DRIVE_BROWSER_URL:-}
       COOKIE_SECURE: "false"
       MAX_UPLOAD_MB: "100"
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://192.168.1.35:8188}
