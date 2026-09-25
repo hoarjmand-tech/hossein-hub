@@ -974,6 +974,33 @@ def home():
     <title>دستیار من</title><style>body{font-family:Tahoma;max-width:760px;margin:12vh auto;padding:24px;background:#f4f6fb;color:#172039}a{display:inline-block;margin:8px;padding:16px 24px;border-radius:14px;background:#536cf7;color:white;text-decoration:none}</style>
     <h1>دستیار من</h1><p>مرکز برنامه‌ها</p><a href='/personal'>دستیار شخصی</a><a href='/archive'>آرشیو</a><a href='/work'>دستیار کاری</a></html>""")
 
+def _drive_browser_call(payload):
+    if not DRIVE_BROWSER_URL:
+        raise HTTPException(503,"اتصال مرورگر Google Drive هنوز تنظیم نشده است")
+    try:
+        req=URLRequest(DRIVE_BROWSER_URL,data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json"},method="POST")
+        with urlopen(req,timeout=45) as response:
+            data=json.loads(response.read().decode("utf-8","replace"))
+        if not data.get("ok",True): raise HTTPException(502,data.get("error","Google Drive پاسخ نامعتبر داد"))
+        return data
+    except HTTPException: raise
+    except Exception as exc: raise HTTPException(502,f"ارتباط با Google Drive ناموفق بود: {str(exc)[:180]}")
+
+@app.get("/drive",response_class=HTMLResponse)
+@app.get("/drive/",response_class=HTMLResponse)
+def drive_browser():
+    return (WEB/"drive.html").read_text(encoding="utf-8")
+
+@app.get("/api/drive/browse")
+def drive_browse(folder_id:str=""):
+    return _drive_browser_call({"action":"list","folderId":folder_id})
+
+@app.post("/api/drive/import")
+def drive_import(payload:dict=Body(default={} )):
+    file_id=str(payload.get("file_id") or "").strip()
+    if not file_id: raise HTTPException(400,"شناسهٔ فایل لازم است")
+    return _drive_browser_call({"action":"import","fileId":file_id})
+
 @app.get("/archive",response_class=HTMLResponse)
 @app.get("/archive/",response_class=HTMLResponse)
 def archive_home():
