@@ -50,6 +50,7 @@ def read_secret(path,env_name):
         return os.getenv(env_name,"").strip()
 
 DRIVE_TOKEN=read_secret(os.getenv("DRIVE_PUSH_TOKEN_FILE","/run/secrets/drive_push_token"),"DRIVE_PUSH_TOKEN")
+DRIVE_BROWSER_URL=os.getenv("DRIVE_BROWSER_URL","").strip()
 ALLOWED={
     "application/pdf","image/jpeg","image/png","image/webp","image/tiff",
     "audio/mpeg","audio/mp3","audio/wav","audio/x-wav","audio/wave",
