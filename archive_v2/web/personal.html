@@ -156,7 +156,7 @@ function searchOpen(type,id){closeSheet('searchSheet');if(type==='case'){go('cas
 document.addEventListener('DOMContentLoaded',()=>{const app=document.querySelector('.app'),main=app?.querySelector('main');if(!app||!main)return;const hubs=[...document.querySelectorAll('body>nav.hub-nav,body>.app>nav.hub-nav')],sections=[...document.querySelectorAll('body>nav.section-nav,body>.app>nav.section-nav')];const hub=hubs[0],section=sections[0];if(hub&&!app.contains(hub))app.insertBefore(hub,main);if(section&&!app.contains(section))app.insertBefore(section,main);if(hub&&section)app.insertBefore(hub,section);hubs.slice(1).forEach(x=>x.remove());sections.slice(1).forEach(x=>x.remove())});
 const today=new Intl.DateTimeFormat('fa-IR',{weekday:'long',day:'numeric',month:'long'}).format(new Date());$('todayLabel').textContent=today;renderTypes();loadAll();
 </script>
-<script src="/personal/integrations.js"></script>
+<script src="/personal/integrations.js?v=3d003c"></script>
 <script src="/personal/v2.js"></script>
 </body>
 </html>
