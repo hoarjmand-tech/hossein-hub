@@ -50,7 +50,12 @@ def read_secret(path,env_name):
         return os.getenv(env_name,"").strip()
 
 DRIVE_TOKEN=read_secret(os.getenv("DRIVE_PUSH_TOKEN_FILE","/run/secrets/drive_push_token"),"DRIVE_PUSH_TOKEN")
-ALLOWED={"application/pdf","image/jpeg","image/png","image/webp","image/tiff"}
+ALLOWED={
+    "application/pdf","image/jpeg","image/png","image/webp","image/tiff",
+    "audio/mpeg","audio/mp3","audio/wav","audio/x-wav","audio/wave",
+    "audio/mp4","audio/ogg","audio/webm","video/mp4","video/webm",
+    "video/quicktime","video/x-matroska",
+}
 GENERIC_NAME=re.compile(r"^(scan|img|image|document|doc|photo|screenshot)[ _-]*[0-9 _.-]*$",re.I)
 
 CATEGORY_RULES=[
@@ -115,10 +120,14 @@ def init_db():
           original_name TEXT NOT NULL,
           stored_name TEXT NOT NULL UNIQUE,
           mime TEXT NOT NULL,
+          media_kind TEXT NOT NULL DEFAULT 'document',
           size INTEGER NOT NULL,
           sha256 TEXT NOT NULL UNIQUE,
           ocr_status TEXT NOT NULL DEFAULT 'pending',
           ocr_text TEXT NOT NULL DEFAULT '',
+          transcript TEXT NOT NULL DEFAULT '',
+          transcript_status TEXT NOT NULL DEFAULT 'not_applicable',
+          media_metadata TEXT NOT NULL DEFAULT '{}',
           category TEXT NOT NULL DEFAULT 'other',
           tags TEXT NOT NULL DEFAULT '',
           notes TEXT NOT NULL DEFAULT '',
@@ -148,6 +157,10 @@ def init_db():
         if "notes" not in dcols:
             con.execute("ALTER TABLE documents ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
         document_migrations={
+            "media_kind":"TEXT NOT NULL DEFAULT 'document'",
+            "transcript":"TEXT NOT NULL DEFAULT ''",
+            "transcript_status":"TEXT NOT NULL DEFAULT 'not_applicable'",
+            "media_metadata":"TEXT NOT NULL DEFAULT '{}'",
             "smart_filename":"TEXT NOT NULL DEFAULT ''",
             "source_name":"TEXT NOT NULL DEFAULT ''",
             "filename_locked":"INTEGER NOT NULL DEFAULT 0",
@@ -429,6 +442,13 @@ def base_title(name):
     stem=re.sub(r"\s+"," ",stem).strip(" .-_")
     return stem or "سند بدون نام"
 
+def media_kind_for_mime(mime):
+    if mime == "application/pdf": return "document"
+    if str(mime).startswith("image/"): return "image"
+    if str(mime).startswith("audio/"): return "audio"
+    if str(mime).startswith("video/"): return "video"
+    return "file"
+
 def is_generic_title(title):
     s=(title or "").strip()
     if not s:return True
@@ -531,11 +551,14 @@ def ingest_upload(upload:UploadFile,source="upload"):
     if saved.get("duplicate"):
         return {"ok":True,"duplicate":True,"id":saved["id"]}
     did=str(uuid.uuid4());ts=now();title=base_title(name)
+    kind=media_kind_for_mime(saved["mime"])
+    transcript_status="pending" if kind in ("audio","video") else "not_applicable"
+    ocr_status="pending" if kind in ("document","image") else "skipped"
     with db() as con:
         con.execute("""INSERT INTO documents
-          (id,title,original_name,source_name,stored_name,mime,size,sha256,ocr_status,ocr_text,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-          (did,title,name,name,saved["stored"],saved["mime"],saved["size"],saved["sha256"],"pending","","other","",None,0,0,0,source,ts,ts))
+          (id,title,original_name,source_name,stored_name,mime,media_kind,size,sha256,ocr_status,ocr_text,transcript,transcript_status,media_metadata,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+          (did,title,name,name,saved["stored"],saved["mime"],kind,saved["size"],saved["sha256"],ocr_status,"","",transcript_status,"{}","other","",None,0,0,0,source,ts,ts))
         row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
         fts_upsert(con,row)
     audit("document_ingested",did,source,name)
@@ -1555,7 +1578,7 @@ def documents(q:str="",category:str="",source:str="",ocr:str="",days:int=0,scope
             where.append("(title LIKE ? OR original_name LIKE ? OR ocr_text LIKE ? OR tags LIKE ? OR notes LIKE ? OR entity_id IN (SELECT id FROM entities WHERE name LIKE ?))")
             args.extend([x,x,x,x,x,x])
     order={"newest":"created_at DESC","oldest":"created_at ASC","name":"title COLLATE NOCASE ASC","size":"size DESC"}.get(sort,"created_at DESC")
-    sql=f"""SELECT id,title,original_name,mime,size,ocr_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text,smart_filename,document_type,country,entity_id,issue_date,expiry_date,version_no,project_id,action_status,follow_up_at,
+    sql=f"""SELECT id,title,original_name,mime,media_kind,size,ocr_status,transcript_status,category,tags,suggested_title,suggestion_conf,favorite,deleted,source,created_at,updated_at,ocr_text,smart_filename,document_type,country,entity_id,issue_date,expiry_date,version_no,project_id,action_status,follow_up_at,
             coalesce((SELECT name FROM entities e WHERE e.id=documents.entity_id),'') AS entity_name
             FROM documents WHERE {' AND '.join(where)} ORDER BY {order} LIMIT 500"""
     with db() as con:
@@ -1578,6 +1601,32 @@ def document(did:str):
         d=dict(row);d["ocr_text"]=(d["ocr_text"] or "")[:30000]
         d["validity_status"]=document_validity(d.get("expiry_date"))
         return d
+
+@app.get("/api/media")
+def media_assets(kind:str="",q:str="",limit:int=100):
+    """Unified media view for documents, images, audio and video."""
+    allowed={"document","image","audio","video","file"}
+    if kind and kind not in allowed: raise HTTPException(400,"Unknown media kind")
+    where=["deleted=0"];args=[]
+    if kind: where.append("media_kind=?");args.append(kind)
+    if q.strip():
+        term=f"%{q.strip()}%";where.append("(title LIKE ? OR original_name LIKE ? OR tags LIKE ? OR notes LIKE ? OR ocr_text LIKE ? OR transcript LIKE ?)");args.extend([term]*6)
+    limit=max(1,min(int(limit or 100),500))
+    with db() as con:
+        rows=[dict(r) for r in con.execute("SELECT id,title,original_name,mime,media_kind,size,ocr_status,transcript_status,source,tags,project_id,created_at,updated_at FROM documents WHERE "+" AND ".join(where)+" ORDER BY created_at DESC LIMIT ?",[*args,limit])]
+    return {"items":rows,"count":len(rows)}
+
+@app.patch("/api/media/{did}/transcript")
+def update_media_transcript(did:str,payload:dict=Body(...)):
+    transcript=str(payload.get("transcript") or "").strip()[:200000]
+    status="done" if transcript else "pending"
+    with db() as con:
+        row=con.execute("SELECT id,media_kind FROM documents WHERE id=? AND deleted=0",(did,)).fetchone()
+        if not row: raise HTTPException(404,"Media not found")
+        if row["media_kind"] not in ("audio","video"): raise HTTPException(400,"Transcript is only available for audio and video")
+        con.execute("UPDATE documents SET transcript=?,transcript_status=?,updated_at=? WHERE id=?",(transcript,status,now(),did))
+    audit("media_transcript_updated",did,"manual",f"characters={len(transcript)}")
+    return {"ok":True,"id":did,"transcript_status":status,"characters":len(transcript)}
 
 @app.post("/api/documents/upload")
 def upload(files:list[UploadFile]=File(...),x_archive_source:str|None=Header(None,alias="X-Archive-Source")):
