@@ -175,7 +175,7 @@ select{border-radius:8px;padding:7px 8px;font-size:11px;max-width:170px}
 .preview-card{width:min(940px,96vw);height:min(690px,92vh);grid-template-columns:360px minmax(0,1fr);grid-template-rows:auto 1fr}
 .preview-pane{background:var(--card2);padding:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-width:0}
 .preview-frame{width:min(100%,320px);height:min(430px,58vh);border:1px solid var(--line);border-radius:13px;background:#e8edf4;display:grid;place-items:center;overflow:hidden;cursor:zoom-in;box-shadow:0 6px 20px #0c193018;position:relative}
-.preview-frame img{width:100%;height:100%;object-fit:contain;display:block;background:white}
+.preview-frame img{width:100%;height:100%;object-fit:contain;display:block;background:white}.preview-frame audio{width:92%;max-width:420px}.preview-frame video{max-width:100%;max-height:100%;background:#000}
 .preview-fallback{padding:25px;text-align:center;color:var(--muted);line-height:1.9}.preview-fallback b{font-size:30px;display:block;color:#728099}
 .preview-commands{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .filename-suggest{border:1px solid #a9c5fa;background:#f2f6ff;color:#274b88;padding:10px;border-radius:10px;margin-top:10px;word-break:break-word}
@@ -286,12 +286,12 @@ html,body,button,input,select,textarea{font-family:AppPersian,Tahoma,Arial,sans-
   <div class="modal-head"><h3>افزودن سند</h3><button class="close" onclick="closeModal('uploadModal')">✕</button></div>
   <div class="modal-body">
    <div id="uploadZone" class="upload-zone" onclick="fileInput.click()">
-    <div class="upicon">⇧</div><b>فایل‌ها را اینجا رها کنید</b><p>PDF، JPG، PNG، WEBP یا TIFF — حداکثر 100MB برای هر فایل</p>
+    <div class="upicon">⇧</div><b>فایل‌ها را اینجا رها کنید</b><p>سند، عکس، صوت یا ویدئو — حداکثر 100MB برای هر فایل</p>
     <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px">
      <button class="btn primary" type="button" onclick="event.stopPropagation();fileInput.click()">انتخاب فایل</button>
      <button class="btn" type="button" onclick="event.stopPropagation();cameraInput.click()">📷 عکس با دوربین</button>
     </div>
-    <input id="fileInput" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" class="hidden" onchange="queueUpload(this.files)">
+    <input id="fileInput" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.mp3,.wav,.m4a,.ogg,.webm,.mp4,.mov,.mkv" class="hidden" onchange="queueUpload(this.files)">
     <input id="cameraInput" type="file" accept="image/*" capture="environment" class="hidden" onchange="queueCameraUpload(this.files)">
    </div>
    <div id="uploadList"></div>
@@ -326,7 +326,9 @@ html,body,button,input,select,textarea{font-family:AppPersian,Tahoma,Arial,sans-
   <div class="modal-head"><h3>مشاهده سند</h3><button class="close" onclick="closePreview()">✕</button></div>
   <section class="preview-pane">
    <div class="preview-frame" onclick="openCurrentNewTab()" title="برای مشاهده نسخه کامل کلیک کنید">
-    <img id="previewImage" alt="پیش‌نمایش سند">
+   <img id="previewImage" alt="پیش‌نمایش سند">
+   <audio id="previewAudio" class="hidden" controls preload="metadata"></audio>
+   <video id="previewVideo" class="hidden" controls preload="metadata"></video>
     <div id="previewFallback" class="preview-fallback hidden"><b>▧</b>پیش‌نمایش هنوز آماده نیست.<br>نسخه کامل را باز کنید.</div>
    </div>
    <div class="preview-commands"><button class="btn primary" onclick="openCurrentNewTab()">مشاهده کامل</button><button class="btn" onclick="downloadCurrent()">دانلود</button></div>
@@ -341,6 +343,7 @@ html,body,button,input,select,textarea{font-family:AppPersian,Tahoma,Arial,sans-
    <div class="meta-block"><div class="meta-label">اعتبار و نسخه</div><div id="pValidity">—</div></div>
    <div class="meta-block"><div class="meta-label">دسته</div><div id="pCategory"></div></div>
    <div class="meta-block"><div class="meta-label">وضعیت OCR</div><div id="pOcr"></div></div>
+   <div class="meta-block" id="transcriptBlock"><div class="meta-label">متن صوت/ویدئو</div><textarea id="pTranscript" class="field" placeholder="متن استخراج‌شده یا یادداشت رسانه…"></textarea><button class="smallbtn" onclick="saveTranscript()">ذخیره متن</button></div>
    <div class="meta-block"><div class="meta-label">برچسب‌ها</div><div id="pTags">—</div></div>
    <div class="meta-block"><div class="meta-label">یادداشت</div><div id="pNotes">—</div></div>
    <div class="meta-block"><div class="meta-label">منبع</div><div id="pSource"></div></div>
@@ -527,7 +530,7 @@ function rowHtml(d){
 }
 function cardHtml(d){
  const trash=state.scope==='trash',checked=state.selected.has(d.id)?'checked':'';
- const preview=d.has_preview?'<img loading="lazy" src="/api/documents/'+d.id+'/preview" alt="">':'<div class="fileicon">'+(d.mime==='application/pdf'?'PDF':'IMG')+'</div>';
+ const preview=d.has_preview?'<img loading="lazy" src="/api/documents/'+d.id+'/preview" alt="">':'<div class="fileicon">'+(d.media_kind==='audio'?'♪':d.media_kind==='video'?'▶':d.mime==='application/pdf'?'PDF':'IMG')+'</div>';
  return '<article class="card"><label class="cardcheck"><input class="check" type="checkbox" '+checked+' onchange="toggleSelect(\''+d.id+'\',this.checked)"></label><div class="thumb" onclick="openDoc(\''+d.id+'\')">'+preview+'<span class="sourcechip">'+esc(sourceName(d.source))+'</span></div><div class="cardbody"><div class="cardtitle" onclick="openDoc(\''+d.id+'\')">'+highlight(d.title,$('search').value.trim())+'</div><div class="sub">'+esc(d.original_name)+'</div><div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap"><span class="badge">'+esc(catName(d.category))+'</span>'+ocrBadge(d.ocr_status)+'</div><div class="cardmeta"><span>'+fmtSize(d.size)+'</span><span>'+fmtDate(d.created_at)+'</span></div><div class="cardactions">'+
  (trash?'<button class="smallbtn success" onclick="restoreDoc(\''+d.id+'\')">بازیابی</button><button class="smallbtn danger" onclick="permanentDelete(\''+d.id+'\')">حذف قطعی</button>':
  '<button class="smallbtn" onclick="openDoc(\''+d.id+'\')">باز</button><button class="smallbtn" onclick="quickEdit(\''+d.id+'\')">ویرایش</button><button class="smallbtn" onclick="shareDoc(\''+d.id+'\')">اشتراک</button><button class="smallbtn '+(d.favorite?'star':'')+'" onclick="toggleFav(\''+d.id+'\','+(d.favorite?0:1)+')">★</button>')+'</div></div></article>'
@@ -552,17 +555,18 @@ async function exportSelected(){
 async function openDoc(id){
  const d=await api('/api/documents/'+id);state.current=d;
  let entities={};try{entities=JSON.parse(d.extracted_entities||'{}')}catch(e){}
- $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pOwner').textContent=entities.person_name||'تشخیص داده نشد';$('pEntity').textContent=d.entity_name||'بدون پرونده';$('pTypeCountry').textContent=[d.document_type||'نوع نامشخص',countryName(d.country)].join(' · ');$('pValidity').textContent=[validityName(d.validity_status),'صدور: '+(d.issue_date||'—'),'انقضا: '+(d.expiry_date||'—'),'نسخه '+(d.version_no||1)].join(' · ');$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);
+ $('pTitle').textContent=d.title;$('pOriginal').textContent=d.original_name;$('pOwner').textContent=entities.person_name||'تشخیص داده نشد';$('pEntity').textContent=d.entity_name||'بدون پرونده';$('pTypeCountry').textContent=[d.document_type||'نوع نامشخص',countryName(d.country)].join(' · ');$('pValidity').textContent=[validityName(d.validity_status),'صدور: '+(d.issue_date||'—'),'انقضا: '+(d.expiry_date||'—'),'نسخه '+(d.version_no||1)].join(' · ');$('pCategory').textContent=catName(d.category);$('pOcr').innerHTML=ocrBadge(d.ocr_status);$('pTags').textContent=d.tags||'—';$('pNotes').textContent=d.notes||'—';$('pSource').textContent=sourceName(d.source);$('pText').textContent=(d.ocr_text||'متنی استخراج نشده است').slice(0,10000);$('transcriptBlock').classList.toggle('hidden',!['audio','video'].includes(d.media_kind));$('pTranscript').value=d.transcript||'';
  const s=$('pSuggest');s.innerHTML=(d.suggested_title&&d.suggested_title!==d.title)?'<div class="suggest"><b>پیشنهاد عنوان</b><div>'+esc(d.suggested_title)+'</div><button class="btn success" style="margin-top:8px" onclick="applySuggestion()">اعمال پیشنهاد</button></div>':'';
  const fs=$('pFilenameSuggest');
  if(d.smart_filename&&d.smart_filename!==d.original_name){fs.innerHTML='<div class="filename-suggest"><b>نام پیشنهادی OCR — قابل ویرایش</b><input id="pSmartFilename" class="field" dir="auto" value="'+esc(d.smart_filename)+'"><small>بر اساس تاریخ، نوع سند، صادرکننده و شماره مرجع</small><button class="btn primary" style="margin-top:8px" onclick="applySmartFilename()">اعمال این نام</button></div>'}
  else if(d.source_name&&d.source_name!==d.original_name){fs.innerHTML='<div class="suggest"><b>✓ نام‌گذاری خودکار انجام شد</b><div dir="auto">'+esc(d.original_name)+'</div><small>نام اولیه: '+esc(d.source_name)+'</small></div>'}
  else fs.innerHTML='';
- const image=$('previewImage'),fallback=$('previewFallback');image.classList.remove('hidden');fallback.classList.add('hidden');
+ const image=$('previewImage'),audio=$('previewAudio'),video=$('previewVideo'),fallback=$('previewFallback');[image,audio,video].forEach(x=>{x.classList.add('hidden');if(x.tagName!=='IMG')x.removeAttribute('src')});fallback.classList.add('hidden');if(d.media_kind==='audio'){audio.src='/api/documents/'+id+'/file';audio.classList.remove('hidden')}else if(d.media_kind==='video'){video.src='/api/documents/'+id+'/file';video.classList.remove('hidden')}else image.classList.remove('hidden');
  image.onload=()=>{image.classList.remove('hidden');fallback.classList.add('hidden')};image.onerror=()=>{image.classList.add('hidden');fallback.classList.remove('hidden')};
- image.src='/api/documents/'+id+'/preview?v='+encodeURIComponent(d.updated_at||'');$('previewModal').classList.remove('hidden')
+ if(d.media_kind!=='audio'&&d.media_kind!=='video')image.src='/api/documents/'+id+'/preview?v='+encodeURIComponent(d.updated_at||'');$('previewModal').classList.remove('hidden')
 }
-function closePreview(){$('previewImage').removeAttribute('src');closeModal('previewModal')}
+function closePreview(){$('previewImage').removeAttribute('src');$('previewAudio').removeAttribute('src');$('previewVideo').removeAttribute('src');closeModal('previewModal')}
+async function saveTranscript(){if(!state.current||!['audio','video'].includes(state.current.media_kind))return;await api('/api/media/'+state.current.id+'/transcript',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:$('pTranscript').value})});toast('متن رسانه ذخیره شد');state.current.transcript=$('pTranscript').value}
 async function applySuggestion(){await api('/api/documents/'+state.current.id+'/apply-suggestion',{method:'POST'});toast('عنوان پیشنهادی اعمال شد');closePreview();refreshAll()}
 async function applySmartFilename(){if(!state.current)return;const id=state.current.id,filename=$('pSmartFilename')?.value.trim()||state.current.smart_filename;await api('/api/documents/'+id+'/apply-smart-filename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename})});toast('نام پیشنهادی OCR اعمال شد');await openDoc(id);refreshAll()}
 function editCurrent(){const d=state.current;if(!d)return;closePreview();$('eTitle').value=d.title||'';$('eFilename').value=d.original_name||'';$('eSmartFilename').value=d.smart_filename||d.original_name||'';$('eCategory').value=d.category||'other';$('eEntity').value=d.entity_id||'';$('eDocumentType').value=d.document_type||'';$('eCountry').value=d.country||'';$('eIssueDate').value=d.issue_date||'';$('eExpiryDate').value=d.expiry_date||'';$('eTags').value=d.tags||'';$('eNotes').value=d.notes||'';$('editModal').classList.remove('hidden')}
