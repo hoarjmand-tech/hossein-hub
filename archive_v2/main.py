@@ -1816,6 +1816,74 @@ def home_search(q:str=""):
         rows += [dict(x) for x in con.execute("SELECT id,title,details,status,'email' AS item_type,updated_at FROM personal_items WHERE item_type='email' AND (title LIKE ? OR details LIKE ?) ORDER BY updated_at DESC LIMIT 12",(term,term))]
     return {"items":rows[:50]}
 
+_HOME_SYSTEM_CACHE={"at":0.0,"data":{}}
+
+def _home_system_snapshot():
+    now_ts=time.time()
+    if now_ts-_HOME_SYSTEM_CACHE["at"]<60 and _HOME_SYSTEM_CACHE["data"]:
+        return _HOME_SYSTEM_CACHE["data"]
+    mirror_files=0
+    mirror_bytes=0
+    try:
+        if DRIVE_MIRROR_PATH.exists():
+            for root,dirs,files in os.walk(DRIVE_MIRROR_PATH):
+                for name in files:
+                    try:
+                        p=Path(root)/name
+                        mirror_files+=1
+                        mirror_bytes+=p.stat().st_size
+                    except OSError:
+                        pass
+    except Exception:
+        pass
+    try:
+        usage=shutil.disk_usage(ROOT)
+        disk={"total":usage.total,"used":usage.used,"free":usage.free,"percent":round((usage.used/usage.total)*100,1) if usage.total else 0}
+    except Exception:
+        disk={"total":0,"used":0,"free":0,"percent":0}
+    data={
+        "archive":"ok",
+        "mirror":{"files":mirror_files,"bytes":mirror_bytes,"ready":mirror_files>0},
+        "disk":disk,
+        "ocr_worker":"ok",
+    }
+    _HOME_SYSTEM_CACHE["at"]=now_ts
+    _HOME_SYSTEM_CACHE["data"]=data
+    return data
+
+@app.get("/api/home/dashboard")
+def home_dashboard():
+    today=datetime.now(timezone.utc).date().isoformat()
+    warning=(datetime.now(timezone.utc).date()+timedelta(days=60)).isoformat()
+    with db() as con:
+        recent_documents=[dict(r) for r in con.execute("""
+            SELECT id,title,original_name,mime,source,ocr_status,created_at,updated_at
+            FROM documents WHERE deleted=0 ORDER BY updated_at DESC LIMIT 8
+        """)]
+        active_cases=[dict(r) for r in con.execute("""
+            SELECT id,title,kind,status,priority,next_action,due_date,updated_at
+            FROM personal_cases WHERE status='active'
+            ORDER BY CASE WHEN due_date='' THEN 1 ELSE 0 END,due_date,priority DESC,updated_at DESC LIMIT 8
+        """)]
+        counts={
+            "documents":con.execute("SELECT count(*) FROM documents WHERE deleted=0").fetchone()[0],
+            "uncategorized":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND (category='other' OR document_type='')").fetchone()[0],
+            "ocr_pending":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND ocr_status IN ('pending','processing')").fetchone()[0],
+            "ocr_failed":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND ocr_status='failed'").fetchone()[0],
+            "scanner":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND source='scanner_folder'").fetchone()[0],
+            "telegram":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND source='telegram'").fetchone()[0],
+            "expiring":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND expiry_date>=? AND expiry_date<=?",(today,warning)).fetchone()[0],
+            "expired":con.execute("SELECT count(*) FROM documents WHERE deleted=0 AND expiry_date<>'' AND expiry_date<?",(today,)).fetchone()[0],
+            "active_cases":con.execute("SELECT count(*) FROM personal_cases WHERE status='active'").fetchone()[0],
+            "captures":con.execute("SELECT count(*) FROM personal_captures WHERE status NOT IN ('confirmed','archived')").fetchone()[0],
+        }
+    return {
+        "counts":counts,
+        "recent_documents":recent_documents,
+        "active_cases":active_cases,
+        "system":_home_system_snapshot(),
+    }
+
 @app.get("/api/stats")
 def stats():
     today=datetime.now(timezone.utc).date().isoformat()
