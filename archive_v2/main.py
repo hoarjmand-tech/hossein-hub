@@ -37,6 +37,7 @@ DRIVE_CACHE=ROOT/"drive_cache"
 DRIVE_BROWSE_CACHE=ROOT/"drive_browse_cache"
 DRIVE_BROWSE_CACHE_TTL=int(os.getenv("DRIVE_BROWSE_CACHE_TTL","120"))
 DRIVE_BROWSE_CACHE_MAX_STALE=int(os.getenv("DRIVE_BROWSE_CACHE_MAX_STALE","86400"))
+DRIVE_MIRROR_PATH=Path(os.getenv("DRIVE_MIRROR_PATH","/drive_mirror"))
 DB_PATH=ROOT/"archive.db"
 WEB=Path(__file__).parent/"web"
 MAX_UPLOAD=int(os.getenv("MAX_UPLOAD_MB","100"))*1024*1024
@@ -1116,7 +1117,23 @@ def _drive_cache_dir(file_id,modified=""):
     version=hashlib.sha256(str(modified or "current").encode()).hexdigest()[:16]
     return DRIVE_CACHE/safe_id/version
 
-def _drive_cached_file(file_id,name,folder_id="",modified=""):
+def _drive_mirror_file(relative_path=""):
+    rel=str(relative_path or "").strip().replace("\\","/")
+    if not rel:
+        return None
+    p=Path(rel)
+    if p.is_absolute() or any(part in {"",".."} for part in p.parts):
+        return None
+    root=DRIVE_MIRROR_PATH.resolve()
+    candidate=(root/p).resolve()
+    if candidate != root and root not in candidate.parents:
+        return None
+    return candidate if candidate.is_file() else None
+
+def _drive_cached_file(file_id,name,folder_id="",modified="",relative_path=""):
+    mirror=_drive_mirror_file(relative_path)
+    if mirror:
+        return mirror,True
     cache_dir=_drive_cache_dir(file_id,modified)
     files=[x for x in cache_dir.iterdir() if x.is_file()] if cache_dir.exists() else []
     if files:
@@ -1130,8 +1147,8 @@ def _drive_cached_file(file_id,name,folder_id="",modified=""):
     path=_drive_copy(file_id,name,folder_id,cache_dir)
     return path,False
 
-def _drive_file_response(file_id,name,folder_id="",download=False,modified=""):
-    path,cached=_drive_cached_file(file_id,name,folder_id,modified)
+def _drive_file_response(file_id,name,folder_id="",download=False,modified="",relative_path=""):
+    path,cached=_drive_cached_file(file_id,name,folder_id,modified,relative_path)
     mime=magic.from_file(str(path),mime=True) or "application/octet-stream"
     suffix=path.suffix.lower()
     if mime=="application/octet-stream":
@@ -1182,12 +1199,12 @@ def drive_browse(folder_id:str="",refresh:int=0):
     return _drive_items(folder_id,force)
 
 @app.get("/api/drive/preview/{file_id}")
-def drive_preview(file_id:str,name:str="",folder_id:str="",modified:str=""):
-    return _drive_file_response(file_id,name,folder_id,False,modified)
+def drive_preview(file_id:str,name:str="",folder_id:str="",modified:str="",relative_path:str=""):
+    return _drive_file_response(file_id,name,folder_id,False,modified,relative_path)
 
 @app.get("/api/drive/download/{file_id}")
-def drive_download(file_id:str,name:str="",folder_id:str="",modified:str=""):
-    return _drive_file_response(file_id,name,folder_id,True,modified)
+def drive_download(file_id:str,name:str="",folder_id:str="",modified:str="",relative_path:str=""):
+    return _drive_file_response(file_id,name,folder_id,True,modified,relative_path)
 
 @app.post("/api/drive/import")
 def drive_import(payload:dict=Body(default={})):
@@ -1197,7 +1214,8 @@ def drive_import(payload:dict=Body(default={})):
     name=str(payload.get("name") or "").strip()
     folder_id=str(payload.get("folder_id") or "").strip()
     modified=str(payload.get("modifiedTime") or "").strip()
-    path,_=_drive_cached_file(file_id,name,folder_id,modified)
+    relative_path=str(payload.get("relative_path") or "").strip()
+    path,_=_drive_cached_file(file_id,name,folder_id,modified,relative_path)
     upload=type("DriveUpload",(),{})()
     upload.filename=path.name
     upload.file=path.open("rb")
