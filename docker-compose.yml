@@ -10,6 +10,7 @@ services:
       DRIVE_ROOT_FOLDER_ID: ${DRIVE_ROOT_FOLDER_ID:-}
       RCLONE_CONFIG_FILE: /run/secrets/rclone/rclone.conf
       RCLONE_CONFIG_PASS: ${RCLONE_CONFIG_PASS:-}
+      DRIVE_MIRROR_PATH: /drive_mirror
       COOKIE_SECURE: "false"
       MAX_UPLOAD_MB: "100"
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://192.168.1.35:8188}
@@ -27,6 +28,7 @@ services:
     volumes:
       - ./archive_data:/data
       - ./secrets/rclone:/run/secrets/rclone:ro
+      - ./drive_mirror:/drive_mirror:ro
     ports:
       - "0.0.0.0:8188:8080"
     healthcheck:
