@@ -7,7 +7,7 @@ services:
       ARCHIVE_ROOT: /data
       DRIVE_PUSH_TOKEN_FILE: /run/secrets/drive_push_token
       DRIVE_REMOTE: ${DRIVE_REMOTE:-hossein-drive}
-      DRIVE_ROOT_FOLDER_ID: ${DRIVE_ROOT_FOLDER_ID:-1aDh5o-paAS7HwFRnKBo2EUHYXe-LV8PP}
+      DRIVE_ROOT_FOLDER_ID: ${DRIVE_ROOT_FOLDER_ID:-}
       RCLONE_CONFIG_FILE: /run/secrets/rclone/rclone.conf
       RCLONE_CONFIG_PASS: ${RCLONE_CONFIG_PASS:-}
       COOKIE_SECURE: "false"
