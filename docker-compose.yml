@@ -37,6 +37,20 @@ services:
       timeout: 5s
       retries: 5
 
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: hossein-hub-caddy
+    restart: unless-stopped
+    depends_on:
+      archive:
+        condition: service_healthy
+    ports:
+      - "0.0.0.0:443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/data:/data
+      - ./caddy/config:/config
+
   drive-mirror:
     image: hossein-hub-archive:latest
     container_name: hossein-hub-drive-mirror
