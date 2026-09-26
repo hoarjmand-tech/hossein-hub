@@ -1079,13 +1079,25 @@ def _drive_cached_file(file_id,modified=""):
 def _drive_file_response(file_id,download=False,modified=""):
     path,cached=_drive_cached_file(file_id,modified)
     mime=magic.from_file(str(path),mime=True) or "application/octet-stream"
-    disposition="attachment" if download else "inline"
+    suffix=path.suffix.lower()
+    if mime=="application/octet-stream":
+        if suffix in {".jpg",".jpeg"}: mime="image/jpeg"
+        elif suffix==".png": mime="image/png"
+        elif suffix==".gif": mime="image/gif"
+        elif suffix==".webp": mime="image/webp"
+        elif suffix==".pdf": mime="application/pdf"
+        elif suffix in {".txt",".log",".csv",".json",".xml",".md"}: mime="text/plain; charset=utf-8"
+    safe_name=path.name.replace(chr(34),"").replace("\r","").replace("\n","")
     headers={
-        "Content-Disposition":f'{disposition}; filename="{path.name.replace(chr(34),"")}"',
         "X-Drive-Cache":"HIT" if cached else "MISS",
         "Cache-Control":"private, max-age=3600",
+        "Accept-Ranges":"bytes",
     }
-    return FileResponse(path,media_type=mime,filename=path.name if download else None,headers=headers)
+    if download:
+        headers["Content-Disposition"]=f'attachment; filename="{safe_name}"'
+        return FileResponse(path,media_type=mime,filename=safe_name,headers=headers)
+    headers["Content-Disposition"]=f'inline; filename="{safe_name}"'
+    return FileResponse(path,media_type=mime,headers=headers)
 
 def _drive_path_target(name,folder_id=""):
     name=str(name or "").strip()
