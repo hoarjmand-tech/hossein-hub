@@ -21,7 +21,7 @@
   <button class="btn" data-view="normal" onclick="setView('normal')">Normal</button>
   <button class="btn" data-view="details" onclick="setView('details')">Details</button>
 </div>
-<button class="btn" onclick="load()">↻ تازه‌سازی</button>
+<button class="btn" onclick="load(true)">↻ تازه‌سازی</button>
 </div>
 <main id="list" class="grid"></main>
 </div>
@@ -53,12 +53,12 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show')
 function applyView(){const box=$('list');box.classList.remove('view-large','view-details');if(viewMode==='large')box.classList.add('view-large');if(viewMode==='details')box.classList.add('view-details');document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===viewMode))}
 function setView(v){viewMode=v;localStorage.setItem('driveViewMode',v);applyView()}
 function iconFor(x){if(x.isDir)return '📁';const m=x.mimeType||'';if(m==='application/pdf')return '📄';if(m.startsWith('image/'))return '🖼️';if(m.startsWith('video/'))return '🎬';if(m.startsWith('audio/'))return '🎵';if(m.includes('word')||m.includes('document'))return '📝';if(m.includes('sheet')||m.includes('excel'))return '📊';return '📎'}
-async function load(){
-  const box=$('list');applyView();box.innerHTML='<div class="empty">در حال دریافت از Google Drive…</div>';$('status').textContent='در حال اتصال…';
+async function load(force=false){
+  const box=$('list');applyView();box.innerHTML='<div class="empty">در حال دریافت از Google Drive…</div>';$('status').textContent=force?'در حال تازه‌سازی از Google…':'در حال بارگذاری…';
   try{
-    const r=await fetch('/api/drive/browse?folder_id='+encodeURIComponent(current));
+    const r=await fetch('/api/drive/browse?folder_id='+encodeURIComponent(current)+(force?'&refresh=1':''));
     const d=await r.json();if(!r.ok)throw Error(d.detail||'خطا در اتصال');
-    $('status').textContent=(d.items||[]).length+' مورد';
+    $('status').textContent=(d.items||[]).length+' مورد'+(d.cache==='HIT'?' · cache':d.cache==='STALE'?' · cache + refresh':'');
     $('crumb').textContent='My Drive'+(stack.length?' / '+stack.map(x=>x.name).join(' / '):'');
     $('backBtn').disabled=!stack.length;
     const rows=d.items||[];itemsById={};rows.forEach(x=>itemsById[x.id]=x);
