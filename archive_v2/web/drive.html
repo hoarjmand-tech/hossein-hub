@@ -74,7 +74,12 @@ async function load(){
 function openFileById(id){const x=itemsById[id];if(x)openFile(x)}
 function openFile(v){selected=v;$('fileTitle').textContent=selected.name;$('modal').classList.add('show');renderPreview()}
 function previewUrl(){
-  return '/api/drive/preview/'+encodeURIComponent(selected.id)+'?modified='+encodeURIComponent(selected.modifiedTime||'');
+  const q=new URLSearchParams({
+    name:selected.name||'',
+    folder_id:current||'',
+    modified:selected.modifiedTime||''
+  });
+  return '/api/drive/preview/'+encodeURIComponent(selected.id)+'?'+q.toString();
 }
 function renderPreview(){
   const p=$('preview');const m=(selected.mimeType||'').toLowerCase();const n=(selected.name||'').toLowerCase();const url=previewUrl();
@@ -102,9 +107,28 @@ function openFolder(id,name){stack.push({id:current,name:name});current=id;load(
 function goBack(){if(!stack.length)return;const p=stack.pop();current=p.id;load()}
 function goRoot(){current='';stack=[];load()}
 async function api(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.detail||'عملیات ناموفق بود');return d}
-async function quickArchive(id){try{const x=itemsById[id]||{};const d=await api('/api/drive/import',{file_id:id,modifiedTime:x.modifiedTime||''});toast(d.duplicate?'قبلاً در آرشیو بوده':'به آرشیو اضافه شد')}catch(e){alert(e.message)}}
+async function quickArchive(id){
+  try{
+    const x=itemsById[id]||{};
+    const d=await api('/api/drive/import',{
+      file_id:id,
+      name:x.name||'',
+      folder_id:current||'',
+      modifiedTime:x.modifiedTime||''
+    });
+    toast(d.duplicate?'قبلاً در آرشیو بوده':'به آرشیو اضافه شد')
+  }catch(e){alert(e.message)}
+}
 async function archiveSelected(){if(!selected)return;await quickArchive(selected.id)}
-function downloadSelected(){if(selected)location.href='/api/drive/download/'+encodeURIComponent(selected.id)+'?modified='+encodeURIComponent(selected.modifiedTime||'')}
+function downloadSelected(){
+  if(!selected)return;
+  const q=new URLSearchParams({
+    name:selected.name||'',
+    folder_id:current||'',
+    modified:selected.modifiedTime||''
+  });
+  location.href='/api/drive/download/'+encodeURIComponent(selected.id)+'?'+q.toString();
+}
 async function renameSelected(){
   if(!selected)return;const n=prompt('نام جدید فایل:',selected.name);if(!n||n===selected.name)return;
   try{await api('/api/drive/rename',{name:selected.name,new_name:n,folder_id:current});selected.name=n;$('fileTitle').textContent=n;toast('نام فایل تغییر کرد');await load()}catch(e){alert(e.message)}
