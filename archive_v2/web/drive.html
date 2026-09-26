@@ -38,7 +38,7 @@
 <script>
 let current='';
 let stack=[];
-let selected=null;
+let selected=null;let itemsById={};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtSize=n=>{n=Number(n||0);if(!n)return '';const u=['B','KB','MB','GB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return (i? n.toFixed(1):n)+' '+u[i]};
@@ -53,17 +53,18 @@ async function load(){
     $('status').textContent=(d.items||[]).length+' مورد';
     $('crumb').textContent='My Drive'+(stack.length?' / '+stack.map(x=>x.name).join(' / '):'');
     $('backBtn').disabled=!stack.length;
-    const rows=d.items||[];
+    const rows=d.items||[];itemsById={};rows.forEach(x=>itemsById[x.id]=x);
     box.innerHTML=rows.length?rows.map(x=>{
       const meta=[x.isDir?'فولدر':(x.mimeType||'فایل'),fmtSize(x.size),fmtDate(x.modifiedTime)].filter(Boolean).join(' · ');
-      if(x.isDir)return '<article class="card" onclick="openFolder(\''+x.id.replace(/'/g,"\\'")+'\',\''+esc(x.name).replace(/'/g,"\\'")+'\')"><div class="icon">'+iconFor(x)+'</div><div class="body"><b>'+esc(x.name)+'</b><small>'+esc(meta)+'</small></div><div class="actions"><button class="btn" onclick="event.stopPropagation();openFolder(\''+x.id.replace(/'/g,"\\'")+'\',\''+esc(x.name).replace(/'/g,"\\'")+'\')">بازکردن</button></div></article>';
-      return '<article class="card" onclick="openFile('+encodeURIComponent(JSON.stringify(x)).replace(/%/g,'_')+')"><div class="icon">'+iconFor(x)+'</div><div class="body"><b>'+esc(x.name)+'</b><small>'+esc(meta)+'</small></div><div class="actions"><button class="btn green" onclick="event.stopPropagation();quickArchive(\''+x.id.replace(/'/g,"\\'")+'\')">آرشیو</button><button class="btn" onclick="event.stopPropagation();selectAndOpen('+encodeURIComponent(JSON.stringify(x)).replace(/%/g,'_')+')">بازکردن</button></div></article>'
+      const sid=String(x.id).replace(/'/g,"\\'");
+      const sname=String(x.name).replace(/'/g,"\\'");
+      if(x.isDir)return '<article class="card" onclick="openFolder(\''+sid+'\',\''+sname+'\')"><div class="icon">'+iconFor(x)+'</div><div class="body"><b>'+esc(x.name)+'</b><small>'+esc(meta)+'</small></div><div class="actions"><button class="btn" onclick="event.stopPropagation();openFolder(\''+sid+'\',\''+sname+'\')">بازکردن</button></div></article>';
+      return '<article class="card" onclick="openFileById(\''+sid+'\')"><div class="icon">'+iconFor(x)+'</div><div class="body"><b>'+esc(x.name)+'</b><small>'+esc(meta)+'</small></div><div class="actions"><button class="btn green" onclick="event.stopPropagation();quickArchive(\''+sid+'\')">آرشیو</button><button class="btn" onclick="event.stopPropagation();openFileById(\''+sid+'\')">بازکردن</button></div></article>'
     }).join(''):'<div class="empty">این فولدر خالی است.</div>';
   }catch(e){$('status').textContent='';box.innerHTML='<div class="error">'+esc(e.message)+'</div>'}
 }
-function decodeItem(v){return JSON.parse(decodeURIComponent(String(v).replace(/_/g,'%')))}
-function selectAndOpen(v){openFile(v)}
-function openFile(v){selected=typeof v==='string'?decodeItem(v):v;$('fileTitle').textContent=selected.name;$('modal').classList.add('show');renderPreview()}
+function openFileById(id){const x=itemsById[id];if(x)openFile(x)}
+function openFile(v){selected=v;$('fileTitle').textContent=selected.name;$('modal').classList.add('show');renderPreview()}
 function renderPreview(){
   const p=$('preview');const m=selected.mimeType||'';const url='/api/drive/preview/'+encodeURIComponent(selected.id);
   if(m.startsWith('image/'))p.innerHTML='<img src="'+url+'" alt="">';
