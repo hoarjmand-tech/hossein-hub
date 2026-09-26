@@ -979,26 +979,46 @@ DRIVE_ROOT_FOLDER_ID=os.getenv("DRIVE_ROOT_FOLDER_ID","1aDh5o-paAS7HwFRnKBo2EUHY
 RCLONE_CONFIG_FILE=os.getenv("RCLONE_CONFIG_FILE","/run/secrets/rclone/rclone.conf").strip()
 RCLONE_CONFIG_PASS=os.getenv("RCLONE_CONFIG_PASS","").strip()
 
+def _rclone_env():
+    env=os.environ.copy()
+    if RCLONE_CONFIG_PASS:
+        env["RCLONE_CONFIG_PASS"]=RCLONE_CONFIG_PASS
+    return env
+
 def _rclone_base():
     if not shutil.which("rclone"):
-        raise HTTPException(503,"اتصال Google Drive روی سرور آماده نیست")
-    cmd=["rclone","--config",RCLONE_CONFIG_FILE]
-    if RCLONE_CONFIG_PASS: cmd += ["--rc-addr","127.0.0.1:0"]
-    return cmd
+        raise HTTPException(503,"rclone روی سرور نصب نیست")
+    if not RCLONE_CONFIG_FILE or not Path(RCLONE_CONFIG_FILE).is_file():
+        raise HTTPException(503,f"فایل تنظیمات Google Drive پیدا نشد: {RCLONE_CONFIG_FILE}")
+    return ["rclone","--config",RCLONE_CONFIG_FILE]
 
-def _rclone_json(args):
-    env=os.environ.copy()
-    if RCLONE_CONFIG_PASS: env["RCLONE_CONFIG_PASS"]=RCLONE_CONFIG_PASS
+def _rclone_run(args,timeout=90):
     try:
-        p=subprocess.run(_rclone_base()+args,env=env,text=True,capture_output=True,timeout=90)
+        p=subprocess.run(_rclone_base()+args,env=_rclone_env(),text=True,capture_output=True,timeout=timeout)
     except subprocess.TimeoutExpired:
         raise HTTPException(504,"پاسخ Google Drive طول کشید")
     if p.returncode:
         detail=(p.stderr or p.stdout or "خطای اتصال Google Drive").strip()[-500:]
         raise HTTPException(502,detail)
-    try:return json.loads(p.stdout or "[]")
+    return p
+
+def _rclone_json(args):
+    p=_rclone_run(args,90)
+    try:
+        return json.loads(p.stdout or "[]")
     except json.JSONDecodeError:
         raise HTTPException(502,"پاسخ Google Drive قابل خواندن نیست")
+
+def _drive_status():
+    try:
+        p=_rclone_run(["listremotes"],30)
+        remotes={x.strip().rstrip(":") for x in (p.stdout or "").splitlines() if x.strip()}
+        if DRIVE_REMOTE not in remotes:
+            return {"ok":False,"connected":False,"remote":DRIVE_REMOTE,"detail":f"remote با نام {DRIVE_REMOTE} در rclone تعریف نشده است"}
+        _rclone_run(["about",f"{DRIVE_REMOTE}:"],45)
+        return {"ok":True,"connected":True,"remote":DRIVE_REMOTE,"root_folder_id":DRIVE_ROOT_FOLDER_ID}
+    except HTTPException as exc:
+        return {"ok":False,"connected":False,"remote":DRIVE_REMOTE,"detail":str(exc.detail)}
 
 def _drive_items(folder_id):
     root=folder_id or DRIVE_ROOT_FOLDER_ID
@@ -1015,11 +1035,8 @@ def _drive_items(folder_id):
     return {"ok":True,"path":"Google Drive","items":items}
 
 def _drive_copyid(file_id,target):
-    env=os.environ.copy()
-    if RCLONE_CONFIG_PASS: env["RCLONE_CONFIG_PASS"]=RCLONE_CONFIG_PASS
     target.mkdir(parents=True,exist_ok=True)
-    p=subprocess.run(_rclone_base()+["copyid",f"{DRIVE_REMOTE}:",file_id,str(target),"--drive-root-folder-id",DRIVE_ROOT_FOLDER_ID,"--metadata"],env=env,text=True,capture_output=True,timeout=180)
-    if p.returncode: raise HTTPException(502,(p.stderr or "دریافت فایل از Google Drive ناموفق بود").strip()[-500:])
+    _rclone_run(["copyid",f"{DRIVE_REMOTE}:",file_id,str(target),"--drive-root-folder-id",DRIVE_ROOT_FOLDER_ID,"--metadata"],180)
     files=[x for x in target.iterdir() if x.is_file()]
     if not files: raise HTTPException(404,"فایل Google Drive پیدا نشد")
     return files[0]
@@ -1029,8 +1046,15 @@ def _drive_copyid(file_id,target):
 def drive_browser():
     return (WEB/"drive.html").read_text(encoding="utf-8")
 
+@app.get("/api/drive/status")
+def drive_status():
+    return _drive_status()
+
 @app.get("/api/drive/browse")
 def drive_browse(folder_id:str=""):
+    status=_drive_status()
+    if not status.get("connected"):
+        raise HTTPException(503,status.get("detail") or "اتصال Google Drive روی سرور آماده نیست")
     return _drive_items(folder_id)
 
 @app.post("/api/drive/import")
