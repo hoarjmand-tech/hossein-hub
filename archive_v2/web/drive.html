@@ -1,1 +1,95 @@
-<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Google Drive · دستیار من</title><style>body{margin:0;background:#f4f6fb;color:#172039;font-family:Tahoma,Arial,sans-serif}.wrap{max-width:900px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.top h1{font-size:22px;margin:0}.top a{background:#fff;border:1px solid #e4e7ef;border-radius:12px;padding:10px 14px;text-decoration:none;color:#5368db;font-size:12px}.bar{display:flex;gap:8px;align-items:center;background:#fff;border-radius:16px;padding:12px;margin-bottom:14px;border:1px solid #e5e8ef}.crumb{flex:1;color:#66728b;font-size:12px}.back,.refresh{border:0;border-radius:10px;background:#eef0ff;color:#5267db;padding:8px 11px;font:inherit;font-size:11px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.card{background:#fff;border:1px solid #e5e8ef;border-radius:16px;padding:13px;display:flex;gap:10px;align-items:center;min-height:72px}.icon{width:42px;height:48px;border-radius:11px;background:#eef0ff;display:grid;place-items:center;font-size:23px;flex:none}.body{min-width:0;flex:1}.body b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.body small{display:block;color:#8490a5;font-size:10px;margin-top:5px}.actions{display:flex;gap:5px}.btn{border:0;border-radius:9px;padding:7px 8px;background:#eef0ff;color:#5267db;font:inherit;font-size:10px}.btn.import{background:#e9f9f3;color:#158866}.empty,.error{padding:30px;text-align:center;color:#7b879b;background:#fff;border-radius:16px}.error{color:#c5544c}@media(max-width:600px){.grid{grid-template-columns:1fr}.top h1{font-size:18px}}</style></head><body><div class="wrap"><header class="top"><h1>Google Drive</h1><a href="/">⌂ صفحه اصلی</a></header><div class="bar"><button class="back" onclick="goBack()">→ برگشت</button><div id="crumb" class="crumb">در حال بارگذاری…</div><button class="refresh" onclick="load()">تازه‌سازی</button></div><main id="list" class="grid"></main></div><script>let current='';const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));async function load(){const box=$('list');box.innerHTML='<div class="empty">در حال دریافت از Google Drive…</div>';try{const r=await fetch('/api/drive/browse?folder_id='+encodeURIComponent(current));const d=await r.json();if(!r.ok)throw Error(d.detail||'خطا در اتصال');$('crumb').textContent=d.path||'Google Drive';const rows=d.items||[];box.innerHTML=rows.length?rows.map(x=>{const folder=x.mimeType==='application/vnd.google-apps.folder';const icon=folder?'📁':x.mimeType==='application/pdf'?'📄':x.mimeType?.startsWith('image/')?'🖼️':'📎';return '<article class="card"><div class="icon">'+icon+'</div><div class="body"><b>'+esc(x.name)+'</b><small>'+esc(folder?'فولدر':x.mimeType||'فایل')+'</small></div><div class="actions">'+(folder?'<button class="btn" onclick="openFolder(\''+x.id+'\')">بازکردن</button>':'<button class="btn import" onclick="importFile(\''+x.id+'\')">افزودن به آرشیو</button>')+'</div></article>'}).join(''):'<div class="empty">این فولدر خالی است.</div>'}catch(e){box.innerHTML='<div class="error">'+esc(e.message)+'</div>'}}function openFolder(id){current=id;load()}function goBack(){current='';load()}async function importFile(id){try{const r=await fetch('/api/drive/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:id})});const d=await r.json();if(!r.ok)throw Error(d.detail||'ثبت ناموفق بود');alert(d.duplicate?'این فایل قبلاً در آرشیو وجود دارد':'فایل مستقیماً وارد آرشیو شد')}catch(e){alert(e.message)}}load();</script></body></html>
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Google Drive · دستیار من</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6fb;color:#172039;font-family:Tahoma,Arial,sans-serif}.wrap{max-width:1180px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.top h1{font-size:22px;margin:0}.home{background:#fff;border:1px solid #e4e7ef;border-radius:12px;padding:10px 14px;text-decoration:none;color:#5368db;font-size:12px}.toolbar{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid #e5e8ef;border-radius:16px;padding:10px;margin-bottom:12px;position:sticky;top:8px;z-index:5}.crumb{flex:1;min-width:0;color:#66728b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.btn{border:0;border-radius:10px;padding:8px 10px;background:#eef0ff;color:#5267db;font:inherit;font-size:11px;cursor:pointer}.btn:hover{filter:brightness(.97)}.btn.green{background:#e8f8f1;color:#12845e}.btn.red{background:#fff0ef;color:#b54841}.status{font-size:10px;color:#7b879b}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.card{background:#fff;border:1px solid #e5e8ef;border-radius:16px;padding:12px;display:flex;gap:10px;align-items:center;min-height:86px;cursor:pointer;transition:.15s}.card:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(48,58,86,.08);border-color:#d7dbea}.icon{width:48px;height:54px;border-radius:12px;background:#eef0ff;display:grid;place-items:center;font-size:25px;flex:none}.body{min-width:0;flex:1}.body b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.body small{display:block;color:#8490a5;font-size:10px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.empty,.error{grid-column:1/-1;padding:34px;text-align:center;background:#fff;border:1px solid #e5e8ef;border-radius:16px;color:#7b879b}.error{color:#b54841}.modal{position:fixed;inset:0;background:rgba(18,25,45,.52);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}.modal.show{display:flex}.sheet{background:#fff;width:min(980px,100%);max-height:92vh;border-radius:20px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.22);display:flex;flex-direction:column}.sheet-head{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid #e8ebf2}.sheet-head b{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}.close{border:0;background:#f1f3f8;border-radius:10px;width:34px;height:34px;cursor:pointer}.preview{background:#eef1f6;min-height:320px;display:grid;place-items:center;overflow:auto}.preview iframe,.preview img{width:100%;height:64vh;border:0;object-fit:contain;background:#fff}.preview .unsupported{padding:40px;text-align:center;color:#69758d}.sheet-actions{padding:12px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid #e8ebf2}.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#172039;color:#fff;padding:10px 14px;border-radius:12px;font-size:11px;display:none;z-index:30}.toast.show{display:block}@media(max-width:850px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.grid{grid-template-columns:1fr}.wrap{padding:12px}.top h1{font-size:18px}.toolbar{flex-wrap:wrap}.crumb{order:3;flex-basis:100%}.actions{display:none}.preview iframe,.preview img{height:58vh}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><h1>Google Drive</h1><a class="home" href="/">⌂ صفحه اصلی</a></header>
+<div class="toolbar">
+<button class="btn" id="backBtn" onclick="goBack()">→ برگشت</button>
+<button class="btn" onclick="goRoot()">⌂ ریشه</button>
+<div id="crumb" class="crumb">My Drive</div>
+<span id="status" class="status"></span>
+<button class="btn" onclick="load()">↻ تازه‌سازی</button>
+</div>
+<main id="list" class="grid"></main>
+</div>
+
+<div id="modal" class="modal" onclick="modalBg(event)">
+  <div class="sheet">
+    <div class="sheet-head"><b id="fileTitle"></b><button class="close" onclick="closeModal()">×</button></div>
+    <div id="preview" class="preview"></div>
+    <div class="sheet-actions">
+      <button class="btn green" onclick="archiveSelected()">✓ ارسال به آرشیو</button>
+      <button class="btn" onclick="downloadSelected()">↓ دانلود</button>
+      <button class="btn" onclick="renameSelected()">✎ تغییر نام</button>
+      <button class="btn red" onclick="deleteSelected()">🗑 حذف از Drive</button>
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+let current='';
+let stack=[];
+let selected=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtSize=n=>{n=Number(n||0);if(!n)return '';const u=['B','KB','MB','GB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return (i? n.toFixed(1):n)+' '+u[i]};
+const fmtDate=s=>{if(!s)return '';try{return new Date(s).toLocaleString('fa-IR')}catch{return s}};
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+function iconFor(x){if(x.isDir)return '📁';const m=x.mimeType||'';if(m==='application/pdf')return '📄';if(m.startsWith('image/'))return '🖼️';if(m.startsWith('video/'))return '🎬';if(m.startsWith('audio/'))return '🎵';if(m.includes('word')||m.includes('document'))return '📝';if(m.includes('sheet')||m.includes('excel'))return '📊';return '📎'}
+async function load(){
+  const box=$('list');box.innerHTML='<div class="empty">در حال دریافت از Google Drive…</div>';$('status').textContent='در حال اتصال…';
+  try{
+    const r=await fetch('/api/drive/browse?folder_id='+encodeURIComponent(current));
+    const d=await r.json();if(!r.ok)throw Error(d.detail||'خطا در اتصال');
+    $('status').textContent=(d.items||[]).length+' مورد';
+    $('crumb').textContent='My Drive'+(stack.length?' / '+stack.map(x=>x.name).join(' / '):'');
+    $('backBtn').disabled=!stack.length;
+    const rows=d.items||[];
+    box.innerHTML=rows.length?rows.map(x=>{
+      const meta=[x.isDir?'فولدر':(x.mimeType||'فایل'),fmtSize(x.size),fmtDate(x.modifiedTime)].filter(Boolean).join(' · ');
+      if(x.isDir)return '<article class="card" onclick="openFolder(\''+x.id.replace(/'/g,"\\'")+'\',\''+esc(x.name).replace(/'/g,"\\'")+'\')"><div class="icon">'+iconFor(x)+'</div><div class="body"><b>'+esc(x.name)+'</b><small>'+esc(meta)+'</small></div><div class="actions"><button class="btn" onclick="event.stopPropagation();openFolder(\''+x.id.replace(/'/g,"\\'")+'\',\''+esc(x.name).replace(/'/g,"\\'")+'\')">بازکردن</button></div></article>';
+      return '<article class="card" onclick="openFile('+encodeURIComponent(JSON.stringify(x)).replace(/%/g,'_')+')"><div class="icon">'+iconFor(x)+'</div><div class="body"><b>'+esc(x.name)+'</b><small>'+esc(meta)+'</small></div><div class="actions"><button class="btn green" onclick="event.stopPropagation();quickArchive(\''+x.id.replace(/'/g,"\\'")+'\')">آرشیو</button><button class="btn" onclick="event.stopPropagation();selectAndOpen('+encodeURIComponent(JSON.stringify(x)).replace(/%/g,'_')+')">بازکردن</button></div></article>'
+    }).join(''):'<div class="empty">این فولدر خالی است.</div>';
+  }catch(e){$('status').textContent='';box.innerHTML='<div class="error">'+esc(e.message)+'</div>'}
+}
+function decodeItem(v){return JSON.parse(decodeURIComponent(String(v).replace(/_/g,'%')))}
+function selectAndOpen(v){openFile(v)}
+function openFile(v){selected=typeof v==='string'?decodeItem(v):v;$('fileTitle').textContent=selected.name;$('modal').classList.add('show');renderPreview()}
+function renderPreview(){
+  const p=$('preview');const m=selected.mimeType||'';const url='/api/drive/preview/'+encodeURIComponent(selected.id);
+  if(m.startsWith('image/'))p.innerHTML='<img src="'+url+'" alt="">';
+  else if(m==='application/pdf'||m.startsWith('text/'))p.innerHTML='<iframe src="'+url+'"></iframe>';
+  else p.innerHTML='<div class="unsupported"><div style="font-size:44px;margin-bottom:12px">'+iconFor(selected)+'</div><b>'+esc(selected.name)+'</b><p>برای این نوع فایل پیش‌نمایش مرورگر تضمین‌شده نیست. می‌توانی آن را دانلود، تغییرنام، حذف یا به آرشیو ارسال کنی.</p><button class="btn" onclick="tryPreview()">تلاش برای نمایش</button></div>';
+}
+function tryPreview(){$('preview').innerHTML='<iframe src="/api/drive/preview/'+encodeURIComponent(selected.id)+'"></iframe>'}
+function closeModal(){$('modal').classList.remove('show');$('preview').innerHTML='';selected=null}
+function modalBg(e){if(e.target===$('modal'))closeModal()}
+function openFolder(id,name){stack.push({id:current,name:name});current=id;load()}
+function goBack(){if(!stack.length)return;const p=stack.pop();current=p.id;load()}
+function goRoot(){current='';stack=[];load()}
+async function api(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.detail||'عملیات ناموفق بود');return d}
+async function quickArchive(id){try{const d=await api('/api/drive/import',{file_id:id});toast(d.duplicate?'قبلاً در آرشیو بوده':'به آرشیو اضافه شد')}catch(e){alert(e.message)}}
+async function archiveSelected(){if(!selected)return;await quickArchive(selected.id)}
+function downloadSelected(){if(selected)location.href='/api/drive/download/'+encodeURIComponent(selected.id)}
+async function renameSelected(){
+  if(!selected)return;const n=prompt('نام جدید فایل:',selected.name);if(!n||n===selected.name)return;
+  try{await api('/api/drive/rename',{name:selected.name,new_name:n,folder_id:current});selected.name=n;$('fileTitle').textContent=n;toast('نام فایل تغییر کرد');await load()}catch(e){alert(e.message)}
+}
+async function deleteSelected(){
+  if(!selected)return;
+  if(!confirm('این فایل از Google Drive به سطل زباله منتقل شود؟\n\n'+selected.name))return;
+  try{await api('/api/drive/delete',{name:selected.name,folder_id:current});toast('فایل به سطل زباله منتقل شد');closeModal();await load()}catch(e){alert(e.message)}
+}
+load();
+</script>
+</body>
+</html>
