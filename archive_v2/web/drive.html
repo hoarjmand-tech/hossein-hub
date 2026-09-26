@@ -90,9 +90,10 @@ function renderPreview(){
   const isImage=m.startsWith('image/')||/\.(jpg|jpeg|png|gif|webp|bmp|tif|tiff|heic)$/i.test(n);
   const isPdf=m==='application/pdf'||/\.pdf$/i.test(n);
   const isText=m.startsWith('text/')||/\.(txt|log|csv|json|xml|md)$/i.test(n);
+  const isOffice=/\.(doc|docx|xls|xlsx|ppt|pptx|odt|ods|odp)$/i.test(n);
   if(isImage){
     p.innerHTML='<img src="'+url+'" alt="" onerror="previewFailed()">';
-  } else if(isPdf){
+  } else if(isPdf||isOffice){
     p.innerHTML='<object data="'+url+'" type="application/pdf" style="width:100%;height:64vh;background:#fff"><iframe src="'+url+'" style="width:100%;height:64vh;border:0"></iframe></object>';
   } else if(isText){
     p.innerHTML='<iframe src="'+url+'"></iframe>';
