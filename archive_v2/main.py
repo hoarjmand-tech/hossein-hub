@@ -975,7 +975,9 @@ def home():
     <h1>دستیار من</h1><p>مرکز برنامه‌ها</p><a href='/personal'>دستیار شخصی</a><a href='/archive'>آرشیو</a><a href='/work'>دستیار کاری</a></html>""")
 
 DRIVE_REMOTE=os.getenv("DRIVE_REMOTE","hossein-drive").strip()
-DRIVE_ROOT_FOLDER_ID=os.getenv("DRIVE_ROOT_FOLDER_ID","1aDh5o-paAS7HwFRnKBo2EUHYXe-LV8PP").strip()
+# Empty means the real My Drive root. A folder ID is used only when the caller
+# explicitly browses that folder.
+DRIVE_ROOT_FOLDER_ID=os.getenv("DRIVE_ROOT_FOLDER_ID","").strip()
 RCLONE_CONFIG_FILE=os.getenv("RCLONE_CONFIG_FILE","/run/secrets/rclone/rclone.conf").strip()
 RCLONE_CONFIG_PASS=os.getenv("RCLONE_CONFIG_PASS","").strip()
 
@@ -998,7 +1000,7 @@ def _rclone_run(args,timeout=90):
     except subprocess.TimeoutExpired:
         raise HTTPException(504,"پاسخ Google Drive طول کشید")
     if p.returncode:
-        detail=(p.stderr or p.stdout or "خطای اتصال Google Drive").strip()[-500:]
+        detail=(p.stderr or p.stdout or "خطای اتصال Google Drive").strip()[-800:]
         raise HTTPException(502,detail)
     return p
 
@@ -1008,6 +1010,10 @@ def _rclone_json(args):
         return json.loads(p.stdout or "[]")
     except json.JSONDecodeError:
         raise HTTPException(502,"پاسخ Google Drive قابل خواندن نیست")
+
+def _drive_scope_args(folder_id=""):
+    folder_id=str(folder_id or "").strip()
+    return ["--drive-root-folder-id",folder_id] if folder_id else []
 
 def _drive_status():
     try:
@@ -1020,26 +1026,59 @@ def _drive_status():
     except HTTPException as exc:
         return {"ok":False,"connected":False,"remote":DRIVE_REMOTE,"detail":str(exc.detail)}
 
-def _drive_items(folder_id):
-    root=folder_id or DRIVE_ROOT_FOLDER_ID
-    args=["lsjson",f"{DRIVE_REMOTE}:", "--recursive=false","--metadata","--drive-root-folder-id",root]
+def _drive_items(folder_id=""):
+    args=["lsjson",f"{DRIVE_REMOTE}:","--recursive=false","--metadata"]+_drive_scope_args(folder_id)
     rows=_rclone_json(args)
     items=[]
     for row in rows:
         rid=str(row.get("ID") or row.get("id") or "")
         name=str(row.get("Name") or row.get("Path") or "")
-        if not name: continue
+        if not name:
+            continue
         isdir=bool(row.get("IsDir"))
-        items.append({"id":rid,"name":name,"mimeType":"application/vnd.google-apps.folder" if isdir else (row.get("MimeType") or "application/octet-stream"),"size":row.get("Size",0),"modifiedTime":row.get("ModTime","")})
-    items.sort(key=lambda x:(x["mimeType"]!="application/vnd.google-apps.folder",x["name"].lower()))
-    return {"ok":True,"path":"Google Drive","items":items}
+        mime="application/vnd.google-apps.folder" if isdir else (row.get("MimeType") or "application/octet-stream")
+        items.append({
+            "id":rid,
+            "name":name,
+            "mimeType":mime,
+            "size":row.get("Size",0),
+            "modifiedTime":row.get("ModTime",""),
+            "isDir":isdir,
+        })
+    items.sort(key=lambda x:(not x["isDir"],x["name"].lower()))
+    return {"ok":True,"path":"My Drive","folder_id":str(folder_id or ""),"items":items}
 
 def _drive_copyid(file_id,target):
     target.mkdir(parents=True,exist_ok=True)
-    _rclone_run(["copyid",f"{DRIVE_REMOTE}:",file_id,str(target),"--drive-root-folder-id",DRIVE_ROOT_FOLDER_ID,"--metadata"],180)
+    _rclone_run(["copyid",f"{DRIVE_REMOTE}:",file_id,str(target),"--metadata"],180)
     files=[x for x in target.iterdir() if x.is_file()]
-    if not files: raise HTTPException(404,"فایل Google Drive پیدا نشد")
+    if not files:
+        raise HTTPException(404,"فایل Google Drive پیدا نشد یا قابل Export نیست")
     return files[0]
+
+def _drive_file_response(file_id,download=False):
+    td=Path(tempfile.mkdtemp(dir=str(TMP),prefix="drive-"))
+    try:
+        path=_drive_copyid(file_id,td)
+        mime=magic.from_file(str(path),mime=True) or "application/octet-stream"
+    except Exception:
+        shutil.rmtree(td,ignore_errors=True)
+        raise
+    disposition="attachment" if download else "inline"
+    headers={"Content-Disposition":f'{disposition}; filename="{path.name.replace(chr(34),"")}"'}
+    return FileResponse(
+        path,
+        media_type=mime,
+        filename=path.name if download else None,
+        headers=headers,
+        background=BackgroundTask(shutil.rmtree,td,ignore_errors=True),
+    )
+
+def _drive_path_target(name,folder_id=""):
+    name=str(name or "").strip()
+    if not name or "/" in name or "\\" in name or name in {".",".."}:
+        raise HTTPException(400,"نام فایل نامعتبر است")
+    return f"{DRIVE_REMOTE}:{name}",_drive_scope_args(folder_id)
 
 @app.get("/drive",response_class=HTMLResponse)
 @app.get("/drive/",response_class=HTMLResponse)
@@ -1057,17 +1096,48 @@ def drive_browse(folder_id:str=""):
         raise HTTPException(503,status.get("detail") or "اتصال Google Drive روی سرور آماده نیست")
     return _drive_items(folder_id)
 
+@app.get("/api/drive/preview/{file_id}")
+def drive_preview(file_id:str):
+    return _drive_file_response(file_id,False)
+
+@app.get("/api/drive/download/{file_id}")
+def drive_download(file_id:str):
+    return _drive_file_response(file_id,True)
+
 @app.post("/api/drive/import")
 def drive_import(payload:dict=Body(default={})):
     file_id=str(payload.get("file_id") or "").strip()
-    if not file_id: raise HTTPException(400,"شناسهٔ فایل لازم است")
+    if not file_id:
+        raise HTTPException(400,"شناسهٔ فایل لازم است")
     with tempfile.TemporaryDirectory(dir=str(TMP)) as td:
         path=_drive_copyid(file_id,Path(td))
         upload=type("DriveUpload",(),{})()
-        upload.filename=path.name; upload.file=path.open("rb")
-        try: result=ingest_upload(upload,"google-drive")
-        finally: upload.file.close()
+        upload.filename=path.name
+        upload.file=path.open("rb")
+        try:
+            result=ingest_upload(upload,"google-drive")
+        finally:
+            upload.file.close()
     return result
+
+@app.post("/api/drive/rename")
+def drive_rename(payload:dict=Body(default={})):
+    old_name=str(payload.get("name") or "").strip()
+    new_name=str(payload.get("new_name") or "").strip()
+    folder_id=str(payload.get("folder_id") or "").strip()
+    src,scope=_drive_path_target(old_name,folder_id)
+    dst,_=_drive_path_target(new_name,folder_id)
+    _rclone_run(["moveto",src,dst]+scope,120)
+    return {"ok":True,"name":new_name}
+
+@app.post("/api/drive/delete")
+def drive_delete(payload:dict=Body(default={})):
+    name=str(payload.get("name") or "").strip()
+    folder_id=str(payload.get("folder_id") or "").strip()
+    target,scope=_drive_path_target(name,folder_id)
+    # Google Drive remote uses trash by default; do not use --drive-use-trash=false.
+    _rclone_run(["deletefile",target]+scope,120)
+    return {"ok":True,"trashed":True}
 
 @app.get("/archive",response_class=HTMLResponse)
 @app.get("/archive/",response_class=HTMLResponse)
