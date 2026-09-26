@@ -66,9 +66,11 @@ echo "===== START ====="
 "${COMPOSE[@]}" up -d --remove-orphans
 
 echo "===== HEALTH ====="
+HEALTH_FILE="$(mktemp)"
+trap 'rm -f "$HEALTH_FILE"' EXIT
 for attempt in $(seq 1 40); do
-  if curl -fsS http://127.0.0.1:8188/health >/tmp/hossein-archive-health.json 2>/dev/null; then
-    cat /tmp/hossein-archive-health.json
+  if curl -fsS http://127.0.0.1:8188/health >"$HEALTH_FILE" 2>/dev/null; then
+    cat "$HEALTH_FILE"
     echo
     "${COMPOSE[@]}" ps
     echo "DEPLOY COMPLETED SUCCESSFULLY"
