@@ -6,7 +6,10 @@ services:
     environment:
       ARCHIVE_ROOT: /data
       DRIVE_PUSH_TOKEN_FILE: /run/secrets/drive_push_token
-      DRIVE_BROWSER_URL: ${DRIVE_BROWSER_URL:-}
+      DRIVE_REMOTE: ${DRIVE_REMOTE:-hossein-drive}
+      DRIVE_ROOT_FOLDER_ID: ${DRIVE_ROOT_FOLDER_ID:-1aDh5o-paAS7HwFRnKBo2EUHYXe-LV8PP}
+      RCLONE_CONFIG_FILE: /run/secrets/rclone/rclone.conf
+      RCLONE_CONFIG_PASS: ${RCLONE_CONFIG_PASS:-}
       COOKIE_SECURE: "false"
       MAX_UPLOAD_MB: "100"
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://192.168.1.35:8188}
@@ -20,8 +23,10 @@ services:
       WORK_ALLOWED_TASKS: ${WORK_ALLOWED_TASKS:-status,docker_status,docker_logs,disk_check,health,backup,fortigate_status,network_snapshot,fortigate_report,fortigate_backup,fortigate_diff,fortigate_rollback,fortigate_change}
     secrets:
       - drive_push_token
+      - rclone_config
     volumes:
       - ./archive_data:/data
+      - ./secrets/rclone:/run/secrets/rclone:ro
     ports:
       - "0.0.0.0:8188:8080"
     healthcheck:
@@ -112,3 +117,5 @@ services:
 secrets:
   drive_push_token:
     file: ./secrets/drive_push_token
+  rclone_config:
+    file: ./secrets/rclone/rclone.conf

@@ -2,7 +2,7 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr tesseract-ocr-fas tesseract-ocr-eng tesseract-ocr-deu \
-    poppler-utils libmagic1 ffmpeg curl \
+    poppler-utils libmagic1 ffmpeg curl rclone \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .

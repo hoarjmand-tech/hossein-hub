@@ -974,17 +974,55 @@ def home():
     <title>دستیار من</title><style>body{font-family:Tahoma;max-width:760px;margin:12vh auto;padding:24px;background:#f4f6fb;color:#172039}a{display:inline-block;margin:8px;padding:16px 24px;border-radius:14px;background:#536cf7;color:white;text-decoration:none}</style>
     <h1>دستیار من</h1><p>مرکز برنامه‌ها</p><a href='/personal'>دستیار شخصی</a><a href='/archive'>آرشیو</a><a href='/work'>دستیار کاری</a></html>""")
 
-def _drive_browser_call(payload):
-    if not DRIVE_BROWSER_URL:
-        raise HTTPException(503,"اتصال مرورگر Google Drive هنوز تنظیم نشده است")
+DRIVE_REMOTE=os.getenv("DRIVE_REMOTE","hossein-drive").strip()
+DRIVE_ROOT_FOLDER_ID=os.getenv("DRIVE_ROOT_FOLDER_ID","1aDh5o-paAS7HwFRnKBo2EUHYXe-LV8PP").strip()
+RCLONE_CONFIG_FILE=os.getenv("RCLONE_CONFIG_FILE","/run/secrets/rclone/rclone.conf").strip()
+RCLONE_CONFIG_PASS=os.getenv("RCLONE_CONFIG_PASS","").strip()
+
+def _rclone_base():
+    if not shutil.which("rclone"):
+        raise HTTPException(503,"اتصال Google Drive روی سرور آماده نیست")
+    cmd=["rclone","--config",RCLONE_CONFIG_FILE]
+    if RCLONE_CONFIG_PASS: cmd += ["--rc-addr","127.0.0.1:0"]
+    return cmd
+
+def _rclone_json(args):
+    env=os.environ.copy()
+    if RCLONE_CONFIG_PASS: env["RCLONE_CONFIG_PASS"]=RCLONE_CONFIG_PASS
     try:
-        req=URLRequest(DRIVE_BROWSER_URL,data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json"},method="POST")
-        with urlopen(req,timeout=45) as response:
-            data=json.loads(response.read().decode("utf-8","replace"))
-        if not data.get("ok",True): raise HTTPException(502,data.get("error","Google Drive پاسخ نامعتبر داد"))
-        return data
-    except HTTPException: raise
-    except Exception as exc: raise HTTPException(502,f"ارتباط با Google Drive ناموفق بود: {str(exc)[:180]}")
+        p=subprocess.run(_rclone_base()+args,env=env,text=True,capture_output=True,timeout=90)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504,"پاسخ Google Drive طول کشید")
+    if p.returncode:
+        detail=(p.stderr or p.stdout or "خطای اتصال Google Drive").strip()[-500:]
+        raise HTTPException(502,detail)
+    try:return json.loads(p.stdout or "[]")
+    except json.JSONDecodeError:
+        raise HTTPException(502,"پاسخ Google Drive قابل خواندن نیست")
+
+def _drive_items(folder_id):
+    root=folder_id or DRIVE_ROOT_FOLDER_ID
+    args=["lsjson",f"{DRIVE_REMOTE}:", "--recursive=false","--metadata","--drive-root-folder-id",root]
+    rows=_rclone_json(args)
+    items=[]
+    for row in rows:
+        rid=str(row.get("ID") or row.get("id") or "")
+        name=str(row.get("Name") or row.get("Path") or "")
+        if not name: continue
+        isdir=bool(row.get("IsDir"))
+        items.append({"id":rid,"name":name,"mimeType":"application/vnd.google-apps.folder" if isdir else (row.get("MimeType") or "application/octet-stream"),"size":row.get("Size",0),"modifiedTime":row.get("ModTime","")})
+    items.sort(key=lambda x:(x["mimeType"]!="application/vnd.google-apps.folder",x["name"].lower()))
+    return {"ok":True,"path":"Google Drive","items":items}
+
+def _drive_copyid(file_id,target):
+    env=os.environ.copy()
+    if RCLONE_CONFIG_PASS: env["RCLONE_CONFIG_PASS"]=RCLONE_CONFIG_PASS
+    target.mkdir(parents=True,exist_ok=True)
+    p=subprocess.run(_rclone_base()+["copyid",f"{DRIVE_REMOTE}:",file_id,str(target),"--drive-root-folder-id",DRIVE_ROOT_FOLDER_ID,"--metadata"],env=env,text=True,capture_output=True,timeout=180)
+    if p.returncode: raise HTTPException(502,(p.stderr or "دریافت فایل از Google Drive ناموفق بود").strip()[-500:])
+    files=[x for x in target.iterdir() if x.is_file()]
+    if not files: raise HTTPException(404,"فایل Google Drive پیدا نشد")
+    return files[0]
 
 @app.get("/drive",response_class=HTMLResponse)
 @app.get("/drive/",response_class=HTMLResponse)
@@ -993,13 +1031,19 @@ def drive_browser():
 
 @app.get("/api/drive/browse")
 def drive_browse(folder_id:str=""):
-    return _drive_browser_call({"action":"list","folderId":folder_id})
+    return _drive_items(folder_id)
 
 @app.post("/api/drive/import")
-def drive_import(payload:dict=Body(default={} )):
+def drive_import(payload:dict=Body(default={})):
     file_id=str(payload.get("file_id") or "").strip()
     if not file_id: raise HTTPException(400,"شناسهٔ فایل لازم است")
-    return _drive_browser_call({"action":"import","fileId":file_id})
+    with tempfile.TemporaryDirectory(dir=str(TMP)) as td:
+        path=_drive_copyid(file_id,Path(td))
+        upload=type("DriveUpload",(),{})()
+        upload.filename=path.name; upload.file=path.open("rb")
+        try: result=ingest_upload(upload,"google-drive")
+        finally: upload.file.close()
+    return result
 
 @app.get("/archive",response_class=HTMLResponse)
 @app.get("/archive/",response_class=HTMLResponse)
