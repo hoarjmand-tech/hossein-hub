@@ -46,20 +46,29 @@ services:
         condition: service_healthy
     environment:
       RCLONE_CONFIG_PASS: ${RCLONE_CONFIG_PASS:-}
-      DRIVE_REMOTE: ${DRIVE_REMOTE:-hossein-drive}
-      MIRROR_INTERVAL_SECONDS: ${DRIVE_MIRROR_INTERVAL_SECONDS:-120}
     volumes:
       - ./secrets/rclone:/run/secrets/rclone:ro
       - ./drive_mirror:/mirror
     entrypoint: ["/bin/sh","-lc"]
     command:
       - |
-        set -eu
+        set -u
         echo "Google Drive mirror service started"
         while true; do
-          echo "[$(date -Iseconds)] Syncing Google Drive -> /mirror"
-          rclone --config /run/secrets/rclone/rclone.conf copy "${DRIVE_REMOTE}:" /mirror             --update             --create-empty-src-dirs             --fast-list             --transfers 4             --checkers 8             --log-level INFO || true
-          sleep "${MIRROR_INTERVAL_SECONDS}"
+          echo "[$(date -Iseconds)] Syncing hossein-drive: -> /mirror"
+          if rclone --config /run/secrets/rclone/rclone.conf copy "hossein-drive:" /mirror \
+            --update \
+            --create-empty-src-dirs \
+            --fast-list \
+            --transfers 8 \
+            --checkers 16 \
+            --drive-acknowledge-abuse \
+            --log-level NOTICE; then
+            echo "[$(date -Iseconds)] Mirror sync completed"
+          else
+            echo "[$(date -Iseconds)] Mirror sync failed; retrying in 30 seconds" >&2
+          fi
+          sleep 30
         done
 
   document-intake:
