@@ -38,6 +38,7 @@ DRIVE_BROWSE_CACHE=ROOT/"drive_browse_cache"
 DRIVE_BROWSE_CACHE_TTL=int(os.getenv("DRIVE_BROWSE_CACHE_TTL","120"))
 DRIVE_BROWSE_CACHE_MAX_STALE=int(os.getenv("DRIVE_BROWSE_CACHE_MAX_STALE","86400"))
 DRIVE_MIRROR_PATH=Path(os.getenv("DRIVE_MIRROR_PATH","/drive_mirror"))
+DRIVE_PREVIEW_CACHE=ROOT/"drive_preview_cache"
 DB_PATH=ROOT/"archive.db"
 WEB=Path(__file__).parent/"web"
 MAX_UPLOAD=int(os.getenv("MAX_UPLOAD_MB","100"))*1024*1024
@@ -46,7 +47,7 @@ COOKIE_SECURE=os.getenv("COOKIE_SECURE","false").lower()=="true"
 TELEGRAM_BOT_TOKEN=os.getenv("TELEGRAM_BOT_TOKEN","").strip()
 TELEGRAM_ALLOWED_USERS={x.strip() for x in os.getenv("TELEGRAM_ALLOWED_USERS","").split(",") if x.strip()}
 TELEGRAM_INIT_MAX_AGE=int(os.getenv("TELEGRAM_INIT_MAX_AGE","86400"))
-for p in (ROOT,FILES,TMP,PREV,DRIVE_CACHE,DRIVE_BROWSE_CACHE): p.mkdir(parents=True,exist_ok=True)
+for p in (ROOT,FILES,TMP,PREV,DRIVE_CACHE,DRIVE_BROWSE_CACHE,DRIVE_PREVIEW_CACHE): p.mkdir(parents=True,exist_ok=True)
 
 def read_secret(path,env_name):
     try:
@@ -1147,10 +1148,47 @@ def _drive_cached_file(file_id,name,folder_id="",modified="",relative_path=""):
     path=_drive_copy(file_id,name,folder_id,cache_dir)
     return path,False
 
+def _drive_preview_pdf(path,file_id,modified=""):
+    suffix=path.suffix.lower()
+    if suffix not in {".doc",".docx",".xls",".xlsx",".ppt",".pptx",".odt",".ods",".odp"}:
+        return None
+    key=hashlib.sha256((str(file_id)+"|"+str(modified or "")+"|"+path.name).encode()).hexdigest()[:32]
+    outdir=DRIVE_PREVIEW_CACHE/key
+    outdir.mkdir(parents=True,exist_ok=True)
+    existing=list(outdir.glob("*.pdf"))
+    if existing:
+        return existing[0]
+    if not shutil.which("libreoffice"):
+        return None
+    try:
+        p=subprocess.run(
+            ["libreoffice","--headless","--convert-to","pdf","--outdir",str(outdir),str(path)],
+            text=True,capture_output=True,timeout=120
+        )
+        if p.returncode:
+            return None
+        pdfs=list(outdir.glob("*.pdf"))
+        return pdfs[0] if pdfs else None
+    except Exception:
+        return None
+
 def _drive_file_response(file_id,name,folder_id="",download=False,modified="",relative_path=""):
     path,cached=_drive_cached_file(file_id,name,folder_id,modified,relative_path)
     mime=magic.from_file(str(path),mime=True) or "application/octet-stream"
     suffix=path.suffix.lower()
+
+    if not download:
+        converted=_drive_preview_pdf(path,file_id,modified)
+        if converted:
+            headers={
+                "X-Drive-Cache":"HIT" if cached else "MISS",
+                "X-Drive-Preview":"converted-pdf",
+                "Cache-Control":"private, max-age=3600",
+                "Accept-Ranges":"bytes",
+                "Content-Disposition":f'inline; filename="{converted.name}"',
+            }
+            return FileResponse(converted,media_type="application/pdf",headers=headers)
+
     if mime=="application/octet-stream":
         if suffix in {".jpg",".jpeg"}: mime="image/jpeg"
         elif suffix==".png": mime="image/png"
