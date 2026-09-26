@@ -47,7 +47,7 @@ services:
     environment:
       RCLONE_CONFIG_PASS: ${RCLONE_CONFIG_PASS:-}
     volumes:
-      - ./secrets/rclone:/run/secrets/rclone:ro
+      - ./secrets/rclone:/run/secrets/rclone
       - ./drive_mirror:/mirror
     entrypoint: ["/bin/sh","-lc"]
     command:
