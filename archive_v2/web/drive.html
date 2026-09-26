@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Google Drive · دستیار من</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f4f6fb;color:#172039;font-family:Tahoma,Arial,sans-serif}.wrap{max-width:1180px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.top h1{font-size:22px;margin:0}.home{background:#fff;border:1px solid #e4e7ef;border-radius:12px;padding:10px 14px;text-decoration:none;color:#5368db;font-size:12px}.toolbar{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid #e5e8ef;border-radius:16px;padding:10px;margin-bottom:12px;position:sticky;top:8px;z-index:5}.crumb{flex:1;min-width:0;color:#66728b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.btn{border:0;border-radius:10px;padding:8px 10px;background:#eef0ff;color:#5267db;font:inherit;font-size:11px;cursor:pointer}.btn:hover{filter:brightness(.97)}.btn.green{background:#e8f8f1;color:#12845e}.btn.red{background:#fff0ef;color:#b54841}.status{font-size:10px;color:#7b879b}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.card{background:#fff;border:1px solid #e5e8ef;border-radius:16px;padding:12px;display:flex;gap:10px;align-items:center;min-height:86px;cursor:pointer;transition:.15s}.card:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(48,58,86,.08);border-color:#d7dbea}.icon{width:48px;height:54px;border-radius:12px;background:#eef0ff;display:grid;place-items:center;font-size:25px;flex:none}.body{min-width:0;flex:1}.body b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.body small{display:block;color:#8490a5;font-size:10px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.empty,.error{grid-column:1/-1;padding:34px;text-align:center;background:#fff;border:1px solid #e5e8ef;border-radius:16px;color:#7b879b}.error{color:#b54841}.modal{position:fixed;inset:0;background:rgba(18,25,45,.52);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}.modal.show{display:flex}.sheet{background:#fff;width:min(980px,100%);max-height:92vh;border-radius:20px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.22);display:flex;flex-direction:column}.sheet-head{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid #e8ebf2}.sheet-head b{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}.close{border:0;background:#f1f3f8;border-radius:10px;width:34px;height:34px;cursor:pointer}.preview{background:#eef1f6;min-height:320px;display:grid;place-items:center;overflow:auto}.preview iframe,.preview img{width:100%;height:64vh;border:0;object-fit:contain;background:#fff}.preview .unsupported{padding:40px;text-align:center;color:#69758d}.sheet-actions{padding:12px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid #e8ebf2}.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#172039;color:#fff;padding:10px 14px;border-radius:12px;font-size:11px;display:none;z-index:30}.toast.show{display:block}@media(max-width:850px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.grid{grid-template-columns:1fr}.wrap{padding:12px}.top h1{font-size:18px}.toolbar{flex-wrap:wrap}.crumb{order:3;flex-basis:100%}.actions{display:none}.preview iframe,.preview img{height:58vh}}
+*{box-sizing:border-box}body{margin:0;background:#f4f6fb;color:#172039;font-family:Tahoma,Arial,sans-serif}.wrap{max-width:1180px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.top h1{font-size:22px;margin:0}.home{background:#fff;border:1px solid #e4e7ef;border-radius:12px;padding:10px 14px;text-decoration:none;color:#5368db;font-size:12px}.toolbar{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid #e5e8ef;border-radius:16px;padding:10px;margin-bottom:12px;position:sticky;top:8px;z-index:5}.crumb{flex:1;min-width:0;color:#66728b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.btn{border:0;border-radius:10px;padding:8px 10px;background:#eef0ff;color:#5267db;font:inherit;font-size:11px;cursor:pointer}.btn:hover{filter:brightness(.97)}.btn.green{background:#e8f8f1;color:#12845e}.btn.red{background:#fff0ef;color:#b54841}.status{font-size:10px;color:#7b879b}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.grid.view-large{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.view-large .card{min-height:118px}.grid.view-large .icon{width:72px;height:78px;font-size:34px}.grid.view-large .body b{font-size:14px}.grid.view-details{display:block}.grid.view-details .card{border-radius:10px;min-height:58px;margin-bottom:6px;padding:8px 10px}.grid.view-details .icon{width:36px;height:40px;font-size:20px}.grid.view-details .body{display:grid;grid-template-columns:minmax(180px,1fr) minmax(260px,2fr);gap:14px;align-items:center}.grid.view-details .body small{margin:0}.view-switch{display:flex;gap:4px}.view-switch .btn.active{background:#5267db;color:#fff}.card{background:#fff;border:1px solid #e5e8ef;border-radius:16px;padding:12px;display:flex;gap:10px;align-items:center;min-height:86px;cursor:pointer;transition:.15s}.card:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(48,58,86,.08);border-color:#d7dbea}.icon{width:48px;height:54px;border-radius:12px;background:#eef0ff;display:grid;place-items:center;font-size:25px;flex:none}.body{min-width:0;flex:1}.body b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.body small{display:block;color:#8490a5;font-size:10px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.empty,.error{grid-column:1/-1;padding:34px;text-align:center;background:#fff;border:1px solid #e5e8ef;border-radius:16px;color:#7b879b}.error{color:#b54841}.modal{position:fixed;inset:0;background:rgba(18,25,45,.52);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}.modal.show{display:flex}.sheet{background:#fff;width:min(980px,100%);max-height:92vh;border-radius:20px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.22);display:flex;flex-direction:column}.sheet-head{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid #e8ebf2}.sheet-head b{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}.close{border:0;background:#f1f3f8;border-radius:10px;width:34px;height:34px;cursor:pointer}.preview{background:#eef1f6;min-height:320px;display:grid;place-items:center;overflow:auto}.preview iframe,.preview img{width:100%;height:64vh;border:0;object-fit:contain;background:#fff}.preview .unsupported{padding:40px;text-align:center;color:#69758d}.sheet-actions{padding:12px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid #e8ebf2}.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#172039;color:#fff;padding:10px 14px;border-radius:12px;font-size:11px;display:none;z-index:30}.toast.show{display:block}@media(max-width:850px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.grid{grid-template-columns:1fr}.wrap{padding:12px}.top h1{font-size:18px}.toolbar{flex-wrap:wrap}.crumb{order:3;flex-basis:100%}.actions{display:none}.preview iframe,.preview img{height:58vh}}
 </style>
 </head>
 <body>
@@ -16,6 +16,11 @@
 <button class="btn" onclick="goRoot()">⌂ ریشه</button>
 <div id="crumb" class="crumb">My Drive</div>
 <span id="status" class="status"></span>
+<div class="view-switch">
+  <button class="btn" data-view="large" onclick="setView('large')">Large</button>
+  <button class="btn" data-view="normal" onclick="setView('normal')">Normal</button>
+  <button class="btn" data-view="details" onclick="setView('details')">Details</button>
+</div>
 <button class="btn" onclick="load()">↻ تازه‌سازی</button>
 </div>
 <main id="list" class="grid"></main>
@@ -38,15 +43,17 @@
 <script>
 let current='';
 let stack=[];
-let selected=null;let itemsById={};
+let selected=null;let itemsById={};let viewMode=localStorage.getItem('driveViewMode')||'normal';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtSize=n=>{n=Number(n||0);if(!n)return '';const u=['B','KB','MB','GB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return (i? n.toFixed(1):n)+' '+u[i]};
 const fmtDate=s=>{if(!s)return '';try{return new Date(s).toLocaleString('fa-IR')}catch{return s}};
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+function applyView(){const box=$('list');box.classList.remove('view-large','view-details');if(viewMode==='large')box.classList.add('view-large');if(viewMode==='details')box.classList.add('view-details');document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===viewMode))}
+function setView(v){viewMode=v;localStorage.setItem('driveViewMode',v);applyView()}
 function iconFor(x){if(x.isDir)return '📁';const m=x.mimeType||'';if(m==='application/pdf')return '📄';if(m.startsWith('image/'))return '🖼️';if(m.startsWith('video/'))return '🎬';if(m.startsWith('audio/'))return '🎵';if(m.includes('word')||m.includes('document'))return '📝';if(m.includes('sheet')||m.includes('excel'))return '📊';return '📎'}
 async function load(){
-  const box=$('list');box.innerHTML='<div class="empty">در حال دریافت از Google Drive…</div>';$('status').textContent='در حال اتصال…';
+  const box=$('list');applyView();box.innerHTML='<div class="empty">در حال دریافت از Google Drive…</div>';$('status').textContent='در حال اتصال…';
   try{
     const r=await fetch('/api/drive/browse?folder_id='+encodeURIComponent(current));
     const d=await r.json();if(!r.ok)throw Error(d.detail||'خطا در اتصال');
@@ -66,7 +73,7 @@ async function load(){
 function openFileById(id){const x=itemsById[id];if(x)openFile(x)}
 function openFile(v){selected=v;$('fileTitle').textContent=selected.name;$('modal').classList.add('show');renderPreview()}
 function renderPreview(){
-  const p=$('preview');const m=selected.mimeType||'';const url='/api/drive/preview/'+encodeURIComponent(selected.id);
+  const p=$('preview');const m=selected.mimeType||'';const url='/api/drive/preview/'+encodeURIComponent(selected.id)+'?modified='+encodeURIComponent(selected.modifiedTime||'');
   if(m.startsWith('image/'))p.innerHTML='<img src="'+url+'" alt="">';
   else if(m==='application/pdf'||m.startsWith('text/'))p.innerHTML='<iframe src="'+url+'"></iframe>';
   else p.innerHTML='<div class="unsupported"><div style="font-size:44px;margin-bottom:12px">'+iconFor(selected)+'</div><b>'+esc(selected.name)+'</b><p>برای این نوع فایل پیش‌نمایش مرورگر تضمین‌شده نیست. می‌توانی آن را دانلود، تغییرنام، حذف یا به آرشیو ارسال کنی.</p><button class="btn" onclick="tryPreview()">تلاش برای نمایش</button></div>';
@@ -78,9 +85,9 @@ function openFolder(id,name){stack.push({id:current,name:name});current=id;load(
 function goBack(){if(!stack.length)return;const p=stack.pop();current=p.id;load()}
 function goRoot(){current='';stack=[];load()}
 async function api(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.detail||'عملیات ناموفق بود');return d}
-async function quickArchive(id){try{const d=await api('/api/drive/import',{file_id:id});toast(d.duplicate?'قبلاً در آرشیو بوده':'به آرشیو اضافه شد')}catch(e){alert(e.message)}}
+async function quickArchive(id){try{const x=itemsById[id]||{};const d=await api('/api/drive/import',{file_id:id,modifiedTime:x.modifiedTime||''});toast(d.duplicate?'قبلاً در آرشیو بوده':'به آرشیو اضافه شد')}catch(e){alert(e.message)}}
 async function archiveSelected(){if(!selected)return;await quickArchive(selected.id)}
-function downloadSelected(){if(selected)location.href='/api/drive/download/'+encodeURIComponent(selected.id)}
+function downloadSelected(){if(selected)location.href='/api/drive/download/'+encodeURIComponent(selected.id)+'?modified='+encodeURIComponent(selected.modifiedTime||'')}
 async function renameSelected(){
   if(!selected)return;const n=prompt('نام جدید فایل:',selected.name);if(!n||n===selected.name)return;
   try{await api('/api/drive/rename',{name:selected.name,new_name:n,folder_id:current});selected.name=n;$('fileTitle').textContent=n;toast('نام فایل تغییر کرد');await load()}catch(e){alert(e.message)}
@@ -90,7 +97,7 @@ async function deleteSelected(){
   if(!confirm('این فایل از Google Drive به سطل زباله منتقل شود؟\n\n'+selected.name))return;
   try{await api('/api/drive/delete',{name:selected.name,folder_id:current});toast('فایل به سطل زباله منتقل شد');closeModal();await load()}catch(e){alert(e.message)}
 }
-load();
+applyView();load();
 </script>
 </body>
 </html>
