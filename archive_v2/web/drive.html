@@ -73,11 +73,15 @@ async function load(force=false){
 }
 function openFileById(id){const x=itemsById[id];if(x)openFile(x)}
 function openFile(v){selected=v;$('fileTitle').textContent=selected.name;$('modal').classList.add('show');renderPreview()}
+function selectedRelativePath(){
+  return [...stack.map(x=>x.name),selected?.name||''].filter(Boolean).join('/');
+}
 function previewUrl(){
   const q=new URLSearchParams({
     name:selected.name||'',
     folder_id:current||'',
-    modified:selected.modifiedTime||''
+    modified:selected.modifiedTime||'',
+    relative_path:selectedRelativePath()
   });
   return '/api/drive/preview/'+encodeURIComponent(selected.id)+'?'+q.toString();
 }
@@ -114,7 +118,8 @@ async function quickArchive(id){
       file_id:id,
       name:x.name||'',
       folder_id:current||'',
-      modifiedTime:x.modifiedTime||''
+      modifiedTime:x.modifiedTime||'',
+      relative_path:[...stack.map(y=>y.name),x.name||''].filter(Boolean).join('/')
     });
     toast(d.duplicate?'قبلاً در آرشیو بوده':'به آرشیو اضافه شد')
   }catch(e){alert(e.message)}
@@ -125,7 +130,8 @@ function downloadSelected(){
   const q=new URLSearchParams({
     name:selected.name||'',
     folder_id:current||'',
-    modified:selected.modifiedTime||''
+    modified:selected.modifiedTime||'',
+    relative_path:selectedRelativePath()
   });
   location.href='/api/drive/download/'+encodeURIComponent(selected.id)+'?'+q.toString();
 }
