@@ -34,6 +34,9 @@ FILES=ROOT/"files"
 TMP=ROOT/"tmp"
 PREV=ROOT/"previews"
 DRIVE_CACHE=ROOT/"drive_cache"
+DRIVE_BROWSE_CACHE=ROOT/"drive_browse_cache"
+DRIVE_BROWSE_CACHE_TTL=int(os.getenv("DRIVE_BROWSE_CACHE_TTL","120"))
+DRIVE_BROWSE_CACHE_MAX_STALE=int(os.getenv("DRIVE_BROWSE_CACHE_MAX_STALE","86400"))
 DB_PATH=ROOT/"archive.db"
 WEB=Path(__file__).parent/"web"
 MAX_UPLOAD=int(os.getenv("MAX_UPLOAD_MB","100"))*1024*1024
@@ -42,7 +45,7 @@ COOKIE_SECURE=os.getenv("COOKIE_SECURE","false").lower()=="true"
 TELEGRAM_BOT_TOKEN=os.getenv("TELEGRAM_BOT_TOKEN","").strip()
 TELEGRAM_ALLOWED_USERS={x.strip() for x in os.getenv("TELEGRAM_ALLOWED_USERS","").split(",") if x.strip()}
 TELEGRAM_INIT_MAX_AGE=int(os.getenv("TELEGRAM_INIT_MAX_AGE","86400"))
-for p in (ROOT,FILES,TMP,PREV,DRIVE_CACHE): p.mkdir(parents=True,exist_ok=True)
+for p in (ROOT,FILES,TMP,PREV,DRIVE_CACHE,DRIVE_BROWSE_CACHE): p.mkdir(parents=True,exist_ok=True)
 
 def read_secret(path,env_name):
     try:
@@ -1027,7 +1030,14 @@ def _drive_status():
     except HTTPException as exc:
         return {"ok":False,"connected":False,"remote":DRIVE_REMOTE,"detail":str(exc.detail)}
 
-def _drive_items(folder_id=""):
+_DRIVE_BROWSE_REFRESHING=set()
+_DRIVE_BROWSE_LOCK=threading.Lock()
+
+def _drive_browse_cache_path(folder_id=""):
+    key=hashlib.sha256(str(folder_id or "root").encode()).hexdigest()
+    return DRIVE_BROWSE_CACHE/f"{key}.json"
+
+def _drive_items_live(folder_id=""):
     args=["lsjson",f"{DRIVE_REMOTE}:","--recursive=false","--metadata"]+_drive_scope_args(folder_id)
     rows=_rclone_json(args)
     items=[]
@@ -1047,7 +1057,42 @@ def _drive_items(folder_id=""):
             "isDir":isdir,
         })
     items.sort(key=lambda x:(not x["isDir"],x["name"].lower()))
-    return {"ok":True,"path":"My Drive","folder_id":str(folder_id or ""),"items":items}
+    result={"ok":True,"path":"My Drive","folder_id":str(folder_id or ""),"items":items,"cache":"MISS","fetched_at":now()}
+    cache_path=_drive_browse_cache_path(folder_id)
+    tmp=cache_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(result,ensure_ascii=False),encoding="utf-8")
+    tmp.replace(cache_path)
+    return result
+
+def _drive_refresh_folder(folder_id=""):
+    key=str(folder_id or "root")
+    with _DRIVE_BROWSE_LOCK:
+        if key in _DRIVE_BROWSE_REFRESHING:
+            return
+        _DRIVE_BROWSE_REFRESHING.add(key)
+    try:
+        _drive_items_live(folder_id)
+    except Exception:
+        pass
+    finally:
+        with _DRIVE_BROWSE_LOCK:
+            _DRIVE_BROWSE_REFRESHING.discard(key)
+
+def _drive_items(folder_id="",force=False):
+    cache_path=_drive_browse_cache_path(folder_id)
+    if not force and cache_path.exists():
+        age=max(0,time.time()-cache_path.stat().st_mtime)
+        if age <= DRIVE_BROWSE_CACHE_MAX_STALE:
+            try:
+                result=json.loads(cache_path.read_text(encoding="utf-8"))
+                result["cache"]="HIT" if age <= DRIVE_BROWSE_CACHE_TTL else "STALE"
+                result["cache_age_seconds"]=int(age)
+                if age > DRIVE_BROWSE_CACHE_TTL:
+                    threading.Thread(target=_drive_refresh_folder,args=(folder_id,),daemon=True).start()
+                return result
+            except Exception:
+                pass
+    return _drive_items_live(folder_id)
 
 def _drive_copy(file_id,name,folder_id,target):
     target.mkdir(parents=True,exist_ok=True)
@@ -1124,11 +1169,11 @@ def drive_status():
     return _drive_status()
 
 @app.get("/api/drive/browse")
-def drive_browse(folder_id:str=""):
+def drive_browse(folder_id:str="",refresh:int=0):
     status=_drive_status()
     if not status.get("connected"):
         raise HTTPException(503,status.get("detail") or "اتصال Google Drive روی سرور آماده نیست")
-    return _drive_items(folder_id)
+    return _drive_items(folder_id,bool(refresh))
 
 @app.get("/api/drive/preview/{file_id}")
 def drive_preview(file_id:str,name:str="",folder_id:str="",modified:str=""):
