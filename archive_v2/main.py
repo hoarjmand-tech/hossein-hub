@@ -1170,10 +1170,16 @@ def drive_status():
 
 @app.get("/api/drive/browse")
 def drive_browse(folder_id:str="",refresh:int=0):
+    # Serve cached folder listings immediately. Connectivity is checked only
+    # when a live refresh is actually required.
+    force=bool(refresh)
+    cache_path=_drive_browse_cache_path(folder_id)
+    if not force and cache_path.exists():
+        return _drive_items(folder_id,False)
     status=_drive_status()
     if not status.get("connected"):
         raise HTTPException(503,status.get("detail") or "اتصال Google Drive روی سرور آماده نیست")
-    return _drive_items(folder_id,bool(refresh))
+    return _drive_items(folder_id,force)
 
 @app.get("/api/drive/preview/{file_id}")
 def drive_preview(file_id:str,name:str="",folder_id:str="",modified:str=""):
