@@ -33,6 +33,7 @@ ROOT=Path(os.getenv("ARCHIVE_ROOT","/data"))
 FILES=ROOT/"files"
 TMP=ROOT/"tmp"
 PREV=ROOT/"previews"
+DRIVE_CACHE=ROOT/"drive_cache"
 DB_PATH=ROOT/"archive.db"
 WEB=Path(__file__).parent/"web"
 MAX_UPLOAD=int(os.getenv("MAX_UPLOAD_MB","100"))*1024*1024
@@ -41,7 +42,7 @@ COOKIE_SECURE=os.getenv("COOKIE_SECURE","false").lower()=="true"
 TELEGRAM_BOT_TOKEN=os.getenv("TELEGRAM_BOT_TOKEN","").strip()
 TELEGRAM_ALLOWED_USERS={x.strip() for x in os.getenv("TELEGRAM_ALLOWED_USERS","").split(",") if x.strip()}
 TELEGRAM_INIT_MAX_AGE=int(os.getenv("TELEGRAM_INIT_MAX_AGE","86400"))
-for p in (ROOT,FILES,TMP,PREV): p.mkdir(parents=True,exist_ok=True)
+for p in (ROOT,FILES,TMP,PREV,DRIVE_CACHE): p.mkdir(parents=True,exist_ok=True)
 
 def read_secret(path,env_name):
     try:
@@ -1056,23 +1057,35 @@ def _drive_copyid(file_id,target):
         raise HTTPException(404,"فایل Google Drive پیدا نشد یا قابل Export نیست")
     return files[0]
 
-def _drive_file_response(file_id,download=False):
-    td=Path(tempfile.mkdtemp(dir=str(TMP),prefix="drive-"))
-    try:
-        path=_drive_copyid(file_id,td)
-        mime=magic.from_file(str(path),mime=True) or "application/octet-stream"
-    except Exception:
-        shutil.rmtree(td,ignore_errors=True)
-        raise
+def _drive_cache_dir(file_id,modified=""):
+    safe_id=hashlib.sha256(str(file_id).encode()).hexdigest()[:24]
+    version=hashlib.sha256(str(modified or "current").encode()).hexdigest()[:16]
+    return DRIVE_CACHE/safe_id/version
+
+def _drive_cached_file(file_id,modified=""):
+    cache_dir=_drive_cache_dir(file_id,modified)
+    files=[x for x in cache_dir.iterdir() if x.is_file()] if cache_dir.exists() else []
+    if files:
+        return files[0],True
+    parent=cache_dir.parent
+    if parent.exists():
+        for old in parent.iterdir():
+            if old.is_dir() and old != cache_dir:
+                shutil.rmtree(old,ignore_errors=True)
+    cache_dir.mkdir(parents=True,exist_ok=True)
+    path=_drive_copyid(file_id,cache_dir)
+    return path,False
+
+def _drive_file_response(file_id,download=False,modified=""):
+    path,cached=_drive_cached_file(file_id,modified)
+    mime=magic.from_file(str(path),mime=True) or "application/octet-stream"
     disposition="attachment" if download else "inline"
-    headers={"Content-Disposition":f'{disposition}; filename="{path.name.replace(chr(34),"")}"'}
-    return FileResponse(
-        path,
-        media_type=mime,
-        filename=path.name if download else None,
-        headers=headers,
-        background=BackgroundTask(shutil.rmtree,td,ignore_errors=True),
-    )
+    headers={
+        "Content-Disposition":f'{disposition}; filename="{path.name.replace(chr(34),"")}"',
+        "X-Drive-Cache":"HIT" if cached else "MISS",
+        "Cache-Control":"private, max-age=3600",
+    }
+    return FileResponse(path,media_type=mime,filename=path.name if download else None,headers=headers)
 
 def _drive_path_target(name,folder_id=""):
     name=str(name or "").strip()
@@ -1097,27 +1110,27 @@ def drive_browse(folder_id:str=""):
     return _drive_items(folder_id)
 
 @app.get("/api/drive/preview/{file_id}")
-def drive_preview(file_id:str):
-    return _drive_file_response(file_id,False)
+def drive_preview(file_id:str,modified:str=""):
+    return _drive_file_response(file_id,False,modified)
 
 @app.get("/api/drive/download/{file_id}")
-def drive_download(file_id:str):
-    return _drive_file_response(file_id,True)
+def drive_download(file_id:str,modified:str=""):
+    return _drive_file_response(file_id,True,modified)
 
 @app.post("/api/drive/import")
 def drive_import(payload:dict=Body(default={})):
     file_id=str(payload.get("file_id") or "").strip()
     if not file_id:
         raise HTTPException(400,"شناسهٔ فایل لازم است")
-    with tempfile.TemporaryDirectory(dir=str(TMP)) as td:
-        path=_drive_copyid(file_id,Path(td))
-        upload=type("DriveUpload",(),{})()
-        upload.filename=path.name
-        upload.file=path.open("rb")
-        try:
-            result=ingest_upload(upload,"google-drive")
-        finally:
-            upload.file.close()
+    modified=str(payload.get("modifiedTime") or "").strip()
+    path,_=_drive_cached_file(file_id,modified)
+    upload=type("DriveUpload",(),{})()
+    upload.filename=path.name
+    upload.file=path.open("rb")
+    try:
+        result=ingest_upload(upload,"google-drive")
+    finally:
+        upload.file.close()
     return result
 
 @app.post("/api/drive/rename")
