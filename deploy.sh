@@ -18,7 +18,7 @@ test -s archive_v2/web/drive.html
 test -f intake-worker/worker.py
 test -f telegram-bot/bot.py
 
-mkdir -p "$BACKUP" scanner_inbox scanner_processed scanner_errors secrets
+mkdir -p "$BACKUP" scanner_inbox scanner_processed scanner_errors secrets drive_mirror
 cp -a docker-compose.yml archive_v2 "$BACKUP/"
 
 if [[ -f archive_data/archive.db ]]; then
