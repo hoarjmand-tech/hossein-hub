@@ -32,6 +32,7 @@
     <div id="preview" class="preview"></div>
     <div class="sheet-actions">
       <button class="btn green" onclick="archiveSelected()">✓ ارسال به آرشیو</button>
+      <button class="btn" onclick="openSelectedNewTab()">↗ باز کردن در تب جدید</button>
       <button class="btn" onclick="downloadSelected()">↓ دانلود</button>
       <button class="btn" onclick="renameSelected()">✎ تغییر نام</button>
       <button class="btn red" onclick="deleteSelected()">🗑 حذف از Drive</button>
@@ -72,13 +73,29 @@ async function load(){
 }
 function openFileById(id){const x=itemsById[id];if(x)openFile(x)}
 function openFile(v){selected=v;$('fileTitle').textContent=selected.name;$('modal').classList.add('show');renderPreview()}
-function renderPreview(){
-  const p=$('preview');const m=selected.mimeType||'';const url='/api/drive/preview/'+encodeURIComponent(selected.id)+'?modified='+encodeURIComponent(selected.modifiedTime||'');
-  if(m.startsWith('image/'))p.innerHTML='<img src="'+url+'" alt="">';
-  else if(m==='application/pdf'||m.startsWith('text/'))p.innerHTML='<iframe src="'+url+'"></iframe>';
-  else p.innerHTML='<div class="unsupported"><div style="font-size:44px;margin-bottom:12px">'+iconFor(selected)+'</div><b>'+esc(selected.name)+'</b><p>برای این نوع فایل پیش‌نمایش مرورگر تضمین‌شده نیست. می‌توانی آن را دانلود، تغییرنام، حذف یا به آرشیو ارسال کنی.</p><button class="btn" onclick="tryPreview()">تلاش برای نمایش</button></div>';
+function previewUrl(){
+  return '/api/drive/preview/'+encodeURIComponent(selected.id)+'?modified='+encodeURIComponent(selected.modifiedTime||'');
 }
-function tryPreview(){$('preview').innerHTML='<iframe src="/api/drive/preview/'+encodeURIComponent(selected.id)+'"></iframe>'}
+function renderPreview(){
+  const p=$('preview');const m=(selected.mimeType||'').toLowerCase();const n=(selected.name||'').toLowerCase();const url=previewUrl();
+  const isImage=m.startsWith('image/')||/\.(jpg|jpeg|png|gif|webp|bmp|tif|tiff|heic)$/i.test(n);
+  const isPdf=m==='application/pdf'||/\.pdf$/i.test(n);
+  const isText=m.startsWith('text/')||/\.(txt|log|csv|json|xml|md)$/i.test(n);
+  if(isImage){
+    p.innerHTML='<img src="'+url+'" alt="" onerror="previewFailed()">';
+  } else if(isPdf){
+    p.innerHTML='<object data="'+url+'" type="application/pdf" style="width:100%;height:64vh;background:#fff"><iframe src="'+url+'" style="width:100%;height:64vh;border:0"></iframe></object>';
+  } else if(isText){
+    p.innerHTML='<iframe src="'+url+'"></iframe>';
+  } else {
+    p.innerHTML='<div class="unsupported"><div style="font-size:44px;margin-bottom:12px">'+iconFor(selected)+'</div><b>'+esc(selected.name)+'</b><p>برای این نوع فایل پیش‌نمایش داخلی تضمین‌شده نیست.</p><button class="btn" onclick="tryPreview()">تلاش برای نمایش</button> <button class="btn" onclick="openSelectedNewTab()">باز کردن در تب جدید</button></div>';
+  }
+}
+function previewFailed(){
+  $('preview').innerHTML='<div class="unsupported"><b>پیش‌نمایش داخل صفحه بارگذاری نشد.</b><p>فایل را در تب جدید باز کن؛ اگر آنجا هم باز نشد، دانلودش کن.</p><button class="btn" onclick="openSelectedNewTab()">باز کردن در تب جدید</button></div>';
+}
+function tryPreview(){$('preview').innerHTML='<iframe src="'+previewUrl()+'"></iframe>'}
+function openSelectedNewTab(){if(selected)window.open(previewUrl(),'_blank','noopener')}
 function closeModal(){$('modal').classList.remove('show');$('preview').innerHTML='';selected=null}
 function modalBg(e){if(e.target===$('modal'))closeModal()}
 function openFolder(id,name){stack.push({id:current,name:name});current=id;load()}
