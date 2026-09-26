@@ -1049,20 +1049,29 @@ def _drive_items(folder_id=""):
     items.sort(key=lambda x:(not x["isDir"],x["name"].lower()))
     return {"ok":True,"path":"My Drive","folder_id":str(folder_id or ""),"items":items}
 
-def _drive_copyid(file_id,target):
+def _drive_copy(file_id,name,folder_id,target):
     target.mkdir(parents=True,exist_ok=True)
-    _rclone_run(["copyid",f"{DRIVE_REMOTE}:",file_id,str(target),"--metadata"],180)
-    files=[x for x in target.iterdir() if x.is_file()]
-    if not files:
-        raise HTTPException(404,"فایل Google Drive پیدا نشد یا قابل Export نیست")
-    return files[0]
+    name=str(name or "").strip()
+    if not name:
+        raise HTTPException(400,"نام فایل لازم است")
+    if "/" in name or "\\" in name or name in {".",".."}:
+        raise HTTPException(400,"نام فایل نامعتبر است")
+    args=["copyto",f"{DRIVE_REMOTE}:{name}",str(target/name),"--metadata"]+_drive_scope_args(folder_id)
+    _rclone_run(args,180)
+    path=target/name
+    if not path.is_file():
+        files=[x for x in target.iterdir() if x.is_file()]
+        if not files:
+            raise HTTPException(404,"فایل Google Drive پیدا نشد یا قابل Export نیست")
+        path=files[0]
+    return path
 
 def _drive_cache_dir(file_id,modified=""):
     safe_id=hashlib.sha256(str(file_id).encode()).hexdigest()[:24]
     version=hashlib.sha256(str(modified or "current").encode()).hexdigest()[:16]
     return DRIVE_CACHE/safe_id/version
 
-def _drive_cached_file(file_id,modified=""):
+def _drive_cached_file(file_id,name,folder_id="",modified=""):
     cache_dir=_drive_cache_dir(file_id,modified)
     files=[x for x in cache_dir.iterdir() if x.is_file()] if cache_dir.exists() else []
     if files:
@@ -1073,11 +1082,11 @@ def _drive_cached_file(file_id,modified=""):
             if old.is_dir() and old != cache_dir:
                 shutil.rmtree(old,ignore_errors=True)
     cache_dir.mkdir(parents=True,exist_ok=True)
-    path=_drive_copyid(file_id,cache_dir)
+    path=_drive_copy(file_id,name,folder_id,cache_dir)
     return path,False
 
-def _drive_file_response(file_id,download=False,modified=""):
-    path,cached=_drive_cached_file(file_id,modified)
+def _drive_file_response(file_id,name,folder_id="",download=False,modified=""):
+    path,cached=_drive_cached_file(file_id,name,folder_id,modified)
     mime=magic.from_file(str(path),mime=True) or "application/octet-stream"
     suffix=path.suffix.lower()
     if mime=="application/octet-stream":
@@ -1122,20 +1131,22 @@ def drive_browse(folder_id:str=""):
     return _drive_items(folder_id)
 
 @app.get("/api/drive/preview/{file_id}")
-def drive_preview(file_id:str,modified:str=""):
-    return _drive_file_response(file_id,False,modified)
+def drive_preview(file_id:str,name:str="",folder_id:str="",modified:str=""):
+    return _drive_file_response(file_id,name,folder_id,False,modified)
 
 @app.get("/api/drive/download/{file_id}")
-def drive_download(file_id:str,modified:str=""):
-    return _drive_file_response(file_id,True,modified)
+def drive_download(file_id:str,name:str="",folder_id:str="",modified:str=""):
+    return _drive_file_response(file_id,name,folder_id,True,modified)
 
 @app.post("/api/drive/import")
 def drive_import(payload:dict=Body(default={})):
     file_id=str(payload.get("file_id") or "").strip()
     if not file_id:
         raise HTTPException(400,"شناسهٔ فایل لازم است")
+    name=str(payload.get("name") or "").strip()
+    folder_id=str(payload.get("folder_id") or "").strip()
     modified=str(payload.get("modifiedTime") or "").strip()
-    path,_=_drive_cached_file(file_id,modified)
+    path,_=_drive_cached_file(file_id,name,folder_id,modified)
     upload=type("DriveUpload",(),{})()
     upload.filename=path.name
     upload.file=path.open("rb")
