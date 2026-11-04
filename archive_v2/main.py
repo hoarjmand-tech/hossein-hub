@@ -1,5 +1,6 @@
 from document_analyzer import analyze_document
 import hashlib
+import difflib
 import hmac
 import ipaddress
 import json
@@ -443,6 +444,24 @@ def upsert_entity(name,kind="person",country=""):
         con.execute("INSERT INTO entities(id,name,kind,country,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",(eid,name,kind,country,"",ts,ts))
         return eid
 
+def normalize_entity_name(value):
+    value=str(value or "").translate(str.maketrans({"ي":"ی","ى":"ی","ك":"ک","ۀ":"ه"})).casefold()
+    value=re.sub(r"[^\w\u0600-\u06ff\s-]"," ",value,flags=re.UNICODE)
+    return re.sub(r"\s+"," ",value).strip()
+
+def find_existing_entity(name):
+    target=normalize_entity_name(name)
+    if not target:return ("","",0.0)
+    with db() as con:
+        rows=con.execute("SELECT id,name,kind FROM entities WHERE kind='person'").fetchall()
+    best=("", "", 0.0)
+    for row in rows:
+        candidate=normalize_entity_name(row["name"])
+        score=1.0 if candidate==target else difflib.SequenceMatcher(None,target,candidate).ratio()
+        if score>best[2]:best=(row["id"],row["name"],score)
+    return best
+
+
 def base_title(name):
     stem=Path(clean_filename(name)).stem
     stem=re.sub(r"[_]+"," ",stem)
@@ -571,49 +590,62 @@ def ingest_upload(upload:UploadFile,source="upload"):
     audit("document_ingested",did,source,name)
     return {"ok":True,"duplicate":False,"id":did,"name":name,"bytes":saved["size"],"queued":True}
 
-def prepare_ocr_image(path,out):
+def prepare_ocr_image(path,out,variant="clean"):
     with Image.open(path) as source:
         image=ImageOps.exif_transpose(source).convert("L")
-        width,height=image.size
-        longest=max(width,height)
-        if longest<2200:
-            scale=2200/longest
+        width,height=image.size; longest=max(width,height)
+        target=3000 if variant=="clean" else 3600
+        if longest<target:
+            scale=target/longest
             image=image.resize((max(1,int(width*scale)),max(1,int(height*scale))),Image.Resampling.LANCZOS)
         elif longest>4200:
             scale=4200/longest
             image=image.resize((max(1,int(width*scale)),max(1,int(height*scale))),Image.Resampling.LANCZOS)
         image=ImageOps.autocontrast(image,cutoff=1)
-        image=image.filter(ImageFilter.MedianFilter(size=3))
-        image=image.filter(ImageFilter.UnsharpMask(radius=1.5,percent=160,threshold=3))
+        if variant=="threshold":
+            image=image.point(lambda p: 255 if p>175 else 0)
+        else:
+            image=image.filter(ImageFilter.MedianFilter(size=3))
+            image=image.filter(ImageFilter.UnsharpMask(radius=1.5,percent=170,threshold=3))
         image.save(out,"PNG",optimize=True,dpi=(300,300))
 
+def _ocr_quality(raw):
+    text=(raw or "").strip()
+    if not text:return -1
+    letters=sum(ch.isalpha() for ch in text)
+    words=len(re.findall(r"[A-Za-z\u0600-\u06ff]{2,}",text))
+    junk=sum(ch in "�□" for ch in text)
+    return letters*1.2+words*2-junk*12+min(len(text),400)*0.03
+
 def tesseract_text(path,langs="fas+eng+deu"):
+    best="";best_score=-1
     with tempfile.TemporaryDirectory() as td:
-        prepared=Path(td)/"ocr.png"
-        try:
-            prepare_ocr_image(path,prepared)
-        except Exception:
-            prepared=path
-        best=""
-        for psm in (6,3):
+        variants=[]
+        for variant in ("clean","threshold"):
+            prepared=Path(td)/f"ocr-{variant}.png"
             try:
-                raw=subprocess.check_output(
-                    ["tesseract",str(prepared),"stdout","-l",langs,"--oem","1","--psm",str(psm),"--dpi","300"],
-                    stderr=subprocess.DEVNULL,text=True,timeout=120
-                ).strip()
-                if len(raw)>len(best):best=raw
-                if len(raw)>=80:break
+                prepare_ocr_image(path,prepared,variant)
+                variants.append(prepared)
             except Exception:
-                continue
-        return best
+                variants.append(Path(path))
+        for prepared in variants:
+            for psm in (6,3,11):
+                try:
+                    raw=subprocess.check_output(
+                      ["tesseract",str(prepared),"stdout","-l",langs,"--oem","1","--psm",str(psm),"--dpi","300"],
+                      stderr=subprocess.DEVNULL,text=True,timeout=120).strip()
+                    score=_ocr_quality(raw)
+                    if score>best_score:
+                        best,best_score=raw,score
+                except Exception:
+                    continue
+    return best
 
 def pdf_native(path):
     try:
         text="\n".join((p.extract_text() or "") for p in PdfReader(str(path)).pages[:12])
-        if len(text.strip())>=250 and sum(c.isalpha() for c in text)>=100:
-            return text
-    except Exception:
-        pass
+        if len(text.strip())>=250 and sum(c.isalpha() for c in text)>=100:return text
+    except Exception:pass
     return ""
 
 def extract_ocr(path,mime):
@@ -624,12 +656,9 @@ def extract_ocr(path,mime):
         with tempfile.TemporaryDirectory() as td:
             prefix=str(Path(td)/"page")
             try:
-                subprocess.run(["pdftoppm","-f","1","-l","8","-png","-r","260",str(path),prefix],
-                               check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=180)
-            except Exception:
-                return ""
-            images=sorted(Path(td).glob("page-*.png"))
-            for img in images:
+                subprocess.run(["pdftoppm","-f","1","-l","8","-png","-r","300",str(path),prefix],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=240)
+            except Exception:return ""
+            for img in sorted(Path(td).glob("page-*.png")):
                 result=tesseract_text(img)
                 if result:texts.append(result)
     elif mime.startswith("image/"):
@@ -685,64 +714,54 @@ def process_one():
         analysis=analyze_document(text,row["original_name"])
         category=analysis["category"] if analysis["category"]!="other" else meta["category"]
         suggested_title=analysis["suggested_title"] if analysis["document_type"]!="سند" else meta["suggested_title"]
-        confidence=max(analysis["ai_confidence"],meta["confidence"])
-        title=row["title"]
-        if is_generic_title(title) and suggested_title and confidence>=0.48:
-            title=suggested_title
-        auto_rename=bool(text and analysis["document_type"]!="سند" and analysis["ai_confidence"]>=0.45 and not row["filename_locked"])
-        display_name=analysis["smart_filename"] if auto_rename else row["original_name"]
+        confidence=max(float(analysis["ai_confidence"] or 0),float(meta["confidence"] or 0))
         detected=json.loads(analysis["extracted_entities"] or "{}")
-        entity_id=row["entity_id"]
-        if not entity_id and detected.get("person_name"):
-            entity_id=upsert_entity(detected["person_name"],"person",analysis.get("country", ""))
-        elif not entity_id and detected.get("issuer"):
-            entity_id=upsert_entity(detected["issuer"],"organization",analysis.get("country", ""))
+        person_name=str(detected.get("person_name") or "").strip()
+        person_conf=float(detected.get("person_confidence") or 0)
+        entity_id=row["entity_id"] or ""
+        matched_id,matched_name,matched_conf=find_existing_entity(person_name) if person_name else ("","",0.0)
+        # Never create a person automatically. Link only an existing, near-exact match
+        # with strong OCR evidence; every other result remains a review suggestion.
+        if not entity_id and matched_id and matched_conf>=0.94 and (person_conf>=0.85 or detected.get("identity_number")):
+            entity_id=matched_id
+        review_reasons=list(detected.get("confidence_reasons") or [])
+        type_conf=float(detected.get("document_type_confidence") or 0)
+        if not text:review_reasons.insert(0,"متن قابل اتکا از OCR استخراج نشد")
+        if type_conf<0.78:review_reasons.append("نوع سند با اطمینان کافی تأیید نشده است")
+        if person_name and not entity_id:review_reasons.append("صاحب سند پیشنهاد شده اما هنوز تأیید نشده است")
+        needs_review=bool(review_reasons and (not text or type_conf<0.78 or (person_name and not entity_id) or category=="identity"))
+        detected.update({
+          "matched_entity_id":entity_id,
+          "matched_entity_name":matched_name if entity_id else "",
+          "matched_entity_confidence":round(matched_conf,3),
+          "needs_review":needs_review,
+          "review_reasons":review_reasons[:8],
+          "analysis_version":"ocr-v2"
+        })
+        analysis["extracted_entities"]=json.dumps(detected,ensure_ascii=False)
+        title=row["title"]
+        if is_generic_title(title) and suggested_title and confidence>=0.85 and not needs_review:title=suggested_title
+        # Keep the original filename; the smart filename is a safe, editable suggestion.
+        display_name=row["original_name"]
         status="done" if text else "empty"
+        action_status="review" if needs_review else (row["action_status"] or "none")
+        description=analysis["description_fa"]
+        if needs_review:description+=" بررسی دستی قبل از تأیید مالک یا نوع سند توصیه می‌شود."
         with db() as con:
-            con.execute("""UPDATE documents SET 
-title=?,
-original_name=?,
-ocr_text=?,
-ocr_status=?,
-category=?,
-suggested_title=?,
-suggestion_conf=?,
-smart_filename=?,
-description_fa=?,
-description_de=?,
-document_type=?,
-entity_id=?,
-country=?,
-ai_confidence=?,
-extracted_entities=?,
-updated_at=?
-WHERE id=?""",
-                        (
-                        title,
-                        display_name,
-                        text,
-                        status,
-                        category,
-                        suggested_title,
-                        confidence,
-                        analysis["smart_filename"],
-                        analysis["description_fa"],
-                        analysis["description_de"],
-                        analysis["document_type"],
-                        entity_id,
-                        analysis.get("country", ""),
-                        analysis["ai_confidence"],
-                        analysis["extracted_entities"],
-                        now(),
-                        row["id"]
-                        ))
+            con.execute("""UPDATE documents SET
+ title=?,original_name=?,ocr_text=?,ocr_status=?,category=?,suggested_title=?,suggestion_conf=?,
+ smart_filename=?,description_fa=?,description_de=?,document_type=?,entity_id=?,country=?,
+ ai_confidence=?,extracted_entities=?,action_status=?,updated_at=? WHERE id=?""",
+             (title,display_name,text,status,category,suggested_title,confidence,analysis["smart_filename"],
+              description,analysis["description_de"],analysis["document_type"],entity_id,
+              analysis.get("country",""),analysis["ai_confidence"],analysis["extracted_entities"],
+              action_status,now(),row["id"]))
             fresh=con.execute("SELECT * FROM documents WHERE id=?",(row["id"],)).fetchone()
             fts_upsert(con,fresh)
-        if auto_rename and display_name!=row["original_name"]:
-            audit("document_auto_renamed",row["id"],"ocr",f'{row["original_name"]} -> {display_name}')
+        audit("document_ocr_analyzed",row["id"],"ocr-v2","review" if needs_review else "confirmed")
     except Exception as e:
         with db() as con:
-            con.execute("UPDATE documents SET ocr_status='failed',updated_at=? WHERE id=?",(now(),row["id"]))
+            con.execute("UPDATE documents SET ocr_status='failed',action_status='review',updated_at=? WHERE id=?",(now(),row["id"]))
         print("ocr:",row["id"],e,flush=True)
     return True
 
@@ -2191,6 +2210,29 @@ def retry_ocr(did:str,payload:dict=Body(default={})):
             (1 if auto_rename else 0,now(),did)
         )
     return {"ok":True,"auto_rename":auto_rename}
+
+@app.post("/api/documents/{did}/confirm-analysis")
+def confirm_analysis(did:str,payload:dict=Body(default={})):
+    with db() as con:
+        row=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
+        if not row:raise HTTPException(404)
+        entity_id=str(payload.get("entity_id") or "").strip()
+        if entity_id and not con.execute("SELECT 1 FROM entities WHERE id=?",(entity_id,)).fetchone():
+            raise HTTPException(400,"شخص یا سازمان انتخاب‌شده پیدا نشد")
+        doc_type=str(payload.get("document_type") or row["document_type"] or "").strip()[:120]
+        category=str(payload.get("category") or row["category"] or "other").strip()[:40]
+        country=str(payload.get("country") or row["country"] or "").strip()[:8]
+        entities={}
+        try:entities=json.loads(row["extracted_entities"] or "{}")
+        except Exception:entities={}
+        entities.update({"needs_review":False,"confirmed":True,"review_reasons":[]})
+        con.execute("""UPDATE documents SET entity_id=?,document_type=?,category=?,country=?,
+            action_status='confirmed',extracted_entities=?,updated_at=? WHERE id=?""",
+          (entity_id,doc_type,category,country,json.dumps(entities,ensure_ascii=False),now(),did))
+        fresh=con.execute("SELECT * FROM documents WHERE id=?",(did,)).fetchone()
+        fts_upsert(con,fresh)
+    audit("document_analysis_confirmed",did,"manual","confirmed")
+    return document(did)
 
 @app.get("/api/documents/{did}/file")
 def file_view(did:str,download:int=0):
